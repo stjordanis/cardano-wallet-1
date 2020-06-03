@@ -8,6 +8,7 @@ module Cardano.Wallet.DummyTarget.Primitive.Types
     , block0
     , dummyNetworkParameters
     , dummyGenesisParameters
+    , dummyProtocolParameters
     , dummyTxParameters
     , genesisHash
     , mockHash

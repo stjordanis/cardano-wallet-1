@@ -69,6 +69,7 @@ import Cardano.Wallet.DB.Sqlite.TH
     , EntityField (..)
     , Key (..)
     , PrivateKey (..)
+    , ProtocolParameters (..)
     , RndState (..)
     , RndStateAddress (..)
     , RndStatePendingAddress (..)
@@ -78,7 +79,6 @@ import Cardano.Wallet.DB.Sqlite.TH
     , TxIn (..)
     , TxMeta (..)
     , TxOut (..)
-    , TxParameters (..)
     , UTxO (..)
     , Wallet (..)
     , migrateAll
@@ -488,7 +488,7 @@ newDBLayer trace defaultFieldValues mDatabaseFile = do
                 let (metas, txins, txouts) = mkTxHistory wid txs
                 putTxMetas metas
                 putTxs txins txouts
-                insert_ (mkTxParametersEntity wid txp)
+                insert_ (mkProtocolParametersEntity wid txp)
             pure res
 
         , removeWallet = \(PrimaryKey wid) -> ExceptT $ do
@@ -639,14 +639,15 @@ newDBLayer trace defaultFieldValues mDatabaseFile = do
                                  Blockchain Parameters
         -----------------------------------------------------------------------}
 
-        , putTxParameters = \(PrimaryKey wid) txp -> ExceptT $ do
+        , putProtocolParameters = \(PrimaryKey wid) txp -> ExceptT $ do
             selectWallet wid >>= \case
                 Nothing -> pure $ Left $ ErrNoSuchWallet wid
                 Just _  -> Right <$> repsert
-                    (TxParametersKey wid)
-                    (mkTxParametersEntity wid txp)
+                    (ProtocolParametersKey wid)
+                    (mkProtocolParametersEntity wid txp)
 
-        , readTxParameters = \(PrimaryKey wid) -> selectTxParameters wid
+        , readProtocolParameters =
+            \(PrimaryKey wid) -> selectProtocolParameters wid
 
         {-----------------------------------------------------------------------
                                      ACID Execution
@@ -945,18 +946,20 @@ txHistoryFromEntity sp tip metas ins outs =
         , W.amount = Quantity (txMetaAmount m)
         }
 
-mkTxParametersEntity
+mkProtocolParametersEntity
     :: W.WalletId
-    -> W.TxParameters
-    -> TxParameters
-mkTxParametersEntity wid (W.TxParameters fp mx) =
-    TxParameters wid fp (getQuantity mx)
+    -> W.ProtocolParameters
+    -> ProtocolParameters
+mkProtocolParametersEntity wid pp =
+    ProtocolParameters wid fp (getQuantity mx) dl
+  where
+    (W.ProtocolParameters (Quantity dl) (W.TxParameters fp mx)) = pp
 
-txParametersFromEntity
-    :: TxParameters
-    -> W.TxParameters
-txParametersFromEntity (TxParameters _ fp mx) =
-    W.TxParameters fp (Quantity mx)
+protocolParametersFromEntity
+    :: ProtocolParameters
+    -> W.ProtocolParameters
+protocolParametersFromEntity (ProtocolParameters _ fp mx dl) =
+    W.ProtocolParameters (Quantity dl) (W.TxParameters fp (Quantity mx))
 
 {-------------------------------------------------------------------------------
                                    DB Queries
@@ -1173,13 +1176,13 @@ selectPrivateKey wid = do
     keys <- selectFirst [PrivateKeyWalletId ==. wid] []
     pure $ (privateKeyFromEntity . entityVal) <$> keys
 
-selectTxParameters
+selectProtocolParameters
     :: MonadIO m
     => W.WalletId
-    -> SqlPersistT m (Maybe W.TxParameters)
-selectTxParameters wid = do
-    txp <- selectFirst [TxParametersWalletId ==. wid] []
-    pure $ (txParametersFromEntity . entityVal) <$> txp
+    -> SqlPersistT m (Maybe W.ProtocolParameters)
+selectProtocolParameters wid = do
+    txp <- selectFirst [ProtocolParametersWalletId ==. wid] []
+    pure $ (protocolParametersFromEntity . entityVal) <$> txp
 
 -- | Find the nearest 'Checkpoint' that is either at the given point or before.
 findNearestPoint

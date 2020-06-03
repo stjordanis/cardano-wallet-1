@@ -37,13 +37,13 @@ import Cardano.Wallet.DB.Model
     , mPutCheckpoint
     , mPutDelegationCertificate
     , mPutPrivateKey
+    , mPutProtocolParameters
     , mPutTxHistory
-    , mPutTxParameters
     , mPutWalletMeta
     , mReadCheckpoint
     , mReadPrivateKey
+    , mReadProtocolParameters
     , mReadTxHistory
-    , mReadTxParameters
     , mReadWalletMeta
     , mRemovePendingTx
     , mRemoveWallet
@@ -143,10 +143,11 @@ newDBLayer = do
                                  Blockchain Parameters
         -----------------------------------------------------------------------}
 
-        , putTxParameters = \pk txp -> ExceptT $ do
-            txp `deepseq` alterDB errNoSuchWallet db (mPutTxParameters pk txp)
+        , putProtocolParameters = \pk txp -> ExceptT $ do
+            txp `deepseq`
+                alterDB errNoSuchWallet db (mPutProtocolParameters pk txp)
 
-        , readTxParameters = readDB db . mReadTxParameters
+        , readProtocolParameters = readDB db . mReadProtocolParameters
 
         {-----------------------------------------------------------------------
                                       Execution

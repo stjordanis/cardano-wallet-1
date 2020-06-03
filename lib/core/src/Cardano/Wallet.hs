@@ -276,7 +276,6 @@ import Cardano.Wallet.Primitive.Types
     , TxIn (..)
     , TxMeta (..)
     , TxOut (..)
-    , TxParameters (..)
     , TxStatus (..)
     , UTxOStatistics
     , UnsignedTx (..)
@@ -523,11 +522,10 @@ createWallet ctx wid wname s = db & \DBLayer{..} -> do
             , delegation = WalletDelegation NotDelegating []
             }
     mapExceptT atomically $
-        initializeWallet (PrimaryKey wid) cp meta hist txp $> wid
+        initializeWallet (PrimaryKey wid) cp meta hist pp $> wid
   where
     db = ctx ^. dbLayer @s @k
     (block0, NetworkParameters gp pp, _) = ctx ^. genesisData
-    txp = txParameters pp
 
 -- | Initialise and store a new legacy Icarus wallet. These wallets are
 -- intrinsically sequential, but, in the incentivized testnet, we only have
@@ -549,7 +547,8 @@ createIcarusWallet
     -> (k 'RootK XPrv, Passphrase "encryption")
     -> ExceptT ErrWalletAlreadyExists IO WalletId
 createIcarusWallet ctx wid wname credentials = db & \DBLayer{..} -> do
-    let s = mkSeqStateFromRootXPrv @n credentials (mkUnboundedAddressPoolGap 10000)
+    let s = mkSeqStateFromRootXPrv @n credentials $
+            mkUnboundedAddressPoolGap 10000
     let (hist, cp) = initWallet block0 gp s
     let addrs = map address . concatMap (view #outputs . fst) $ hist
     let g  = defaultAddressPoolGap
@@ -567,11 +566,10 @@ createIcarusWallet ctx wid wname credentials = db & \DBLayer{..} -> do
             }
     let pk = PrimaryKey wid
     mapExceptT atomically $
-        initializeWallet pk (updateState s' cp) meta hist txp $> wid
+        initializeWallet pk (updateState s' cp) meta hist pp $> wid
   where
     db = ctx ^. dbLayer @s @k
     (block0, NetworkParameters gp pp, _) = ctx ^. genesisData
-    txp = txParameters pp
 
 -- | Check whether a wallet is in good shape when restarting a worker.
 checkWalletIntegrity
@@ -608,15 +606,15 @@ readWallet ctx wid = db & \DBLayer{..} -> mapExceptT atomically $ do
   where
     db = ctx ^. dbLayer @s @k
 
-readWalletTxParameters
+readWalletProtocolParameters
     :: forall ctx s k. HasDBLayer s k ctx
     => ctx
     -> WalletId
-    -> ExceptT ErrNoSuchWallet IO TxParameters
-readWalletTxParameters ctx wid = db & \DBLayer{..} ->
+    -> ExceptT ErrNoSuchWallet IO ProtocolParameters
+readWalletProtocolParameters ctx wid = db & \DBLayer{..} ->
     mapExceptT atomically $
         withNoSuchWallet wid $
-            readTxParameters (PrimaryKey wid)
+            readProtocolParameters (PrimaryKey wid)
   where
     db = ctx ^. dbLayer @s @k
 
@@ -826,10 +824,10 @@ saveParams
         )
     => ctx
     -> WalletId
-    -> TxParameters
+    -> ProtocolParameters
     -> ExceptT ErrNoSuchWallet IO ()
 saveParams ctx wid params = db & \DBLayer{..} ->
-   mapExceptT atomically $ putTxParameters (PrimaryKey wid) params
+   mapExceptT atomically $ putProtocolParameters (PrimaryKey wid) params
   where
     db = ctx ^. dbLayer @s @k
 
@@ -1057,7 +1055,7 @@ selectCoinsSetup
     -> ExceptT ErrNoSuchWallet IO (W.UTxO, W.TxParameters)
 selectCoinsSetup ctx wid = do
     (wal, _, pending) <- readWallet @ctx @s @k ctx wid
-    txp <- readWalletTxParameters @ctx @s @k ctx wid
+    txp <- txParameters <$> readWalletProtocolParameters @ctx @s @k ctx wid
     let utxo = availableUTxO @s pending wal
     return (utxo, txp)
 
@@ -1193,10 +1191,10 @@ estimateFeeForPayment
     -> NonEmpty TxOut
     -> ExceptT (ErrSelectForPayment e) IO FeeEstimation
 estimateFeeForPayment ctx wid recipients = do
-    (utxo, txp) <- withExceptT ErrSelectForPaymentNoSuchWallet $
+    (utxo, pp) <- withExceptT ErrSelectForPaymentNoSuchWallet $
         selectCoinsSetup @ctx @s @k ctx wid
     estimateFeeForCoinSelection $
-        selectCoinsForPaymentFromUTxO @ctx @t @k @e ctx utxo txp recipients
+        selectCoinsForPaymentFromUTxO @ctx @t @k @e ctx utxo pp recipients
 
 -- | Augments the given outputs with new outputs. These new outputs corresponds
 -- to change outputs to which new addresses are being assigned to. This updates

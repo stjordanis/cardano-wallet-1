@@ -76,13 +76,13 @@ import Cardano.Wallet.DB.Model
     , mPutCheckpoint
     , mPutDelegationCertificate
     , mPutPrivateKey
+    , mPutProtocolParameters
     , mPutTxHistory
-    , mPutTxParameters
     , mPutWalletMeta
     , mReadCheckpoint
     , mReadPrivateKey
+    , mReadProtocolParameters
     , mReadTxHistory
-    , mReadTxParameters
     , mReadWalletMeta
     , mRemovePendingTx
     , mRemoveWallet
@@ -116,6 +116,7 @@ import Cardano.Wallet.Primitive.Types
     , Hash (..)
     , Hash (..)
     , PoolId (..)
+    , ProtocolParameters (..)
     , Range (..)
     , SlotId (..)
     , SlotNo (..)
@@ -125,7 +126,7 @@ import Cardano.Wallet.Primitive.Types
     , TxIn (..)
     , TxMeta (..)
     , TxOut (..)
-    , TxParameters
+    , TxParameters (..)
     , TxStatus
     , UTxO (..)
     , WalletId (..)
@@ -155,7 +156,7 @@ import Data.Map
 import Data.Maybe
     ( catMaybes, fromJust, isJust, isNothing )
 import Data.Quantity
-    ( Quantity (..) )
+    ( Percentage (..), Quantity (..) )
 import Data.Set
     ( Set )
 import Data.TreeDiff
@@ -275,7 +276,7 @@ instance MockPrivKey (ByronKey 'RootK) where
 
 data Cmd s wid
     = CleanDB
-    | CreateWallet MWid (Wallet s) WalletMetadata TxHistory TxParameters
+    | CreateWallet MWid (Wallet s) WalletMetadata TxHistory ProtocolParameters
     | RemoveWallet wid
     | ListWallets
     | PutCheckpoint wid (Wallet s)
@@ -287,8 +288,8 @@ data Cmd s wid
     | ReadTxHistory wid SortOrder (Range SlotId) (Maybe TxStatus)
     | PutPrivateKey wid MPrivKey
     | ReadPrivateKey wid
-    | PutTxParameters wid TxParameters
-    | ReadTxParameters wid
+    | PutProtocolParameters wid ProtocolParameters
+    | ReadProtocolParameters wid
     | RollbackTo wid SlotId
     | RemovePendingTx wid (Hash "Tx")
     | PutDelegationCertificate wid DelegationCertificate SlotId
@@ -302,7 +303,7 @@ data Success s wid
     | Metadata (Maybe WalletMetadata)
     | TxHistory [TransactionInfo]
     | PrivateKey (Maybe MPrivKey)
-    | TxParams (Maybe TxParameters)
+    | ProtocolParams (Maybe ProtocolParameters)
     | BlockHeaders [BlockHeader]
     | Point SlotId
     deriving (Show, Eq, Functor, Foldable, Traversable)
@@ -355,10 +356,10 @@ runMock = \case
         first (Resp . fmap Unit) . mPutPrivateKey wid pk
     ReadPrivateKey wid ->
         first (Resp . fmap PrivateKey) . mReadPrivateKey wid
-    PutTxParameters wid txp ->
-        first (Resp . fmap Unit) . mPutTxParameters wid txp
-    ReadTxParameters wid ->
-        first (Resp . fmap TxParams) . mReadTxParameters wid
+    PutProtocolParameters wid txp ->
+        first (Resp . fmap Unit) . mPutProtocolParameters wid txp
+    ReadProtocolParameters wid ->
+        first (Resp . fmap ProtocolParams) . mReadProtocolParameters wid
     RollbackTo wid sl ->
         first (Resp . fmap Point) . mRollbackTo wid sl
     RemovePendingTx wid tid ->
@@ -415,10 +416,10 @@ runIO db@DBLayer{..} = fmap Resp . go
             mapExceptT atomically $ putPrivateKey (PrimaryKey wid) (fromMockPrivKey pk)
         ReadPrivateKey wid -> Right . PrivateKey . fmap toMockPrivKey <$>
             atomically (readPrivateKey $ PrimaryKey wid)
-        PutTxParameters wid txp -> catchNoSuchWallet Unit $
-            mapExceptT atomically $ putTxParameters (PrimaryKey wid) txp
-        ReadTxParameters wid -> Right . TxParams <$>
-            atomically (readTxParameters $ PrimaryKey wid)
+        PutProtocolParameters wid pp -> catchNoSuchWallet Unit $
+            mapExceptT atomically $ putProtocolParameters (PrimaryKey wid) pp
+        ReadProtocolParameters wid -> Right . ProtocolParams <$>
+            atomically (readProtocolParameters $ PrimaryKey wid)
         RollbackTo wid sl -> catchNoSuchWallet Point $
             mapExceptT atomically $ rollbackTo (PrimaryKey wid) sl
 
@@ -687,8 +688,8 @@ instance CommandNames (At (Cmd s)) where
     cmdName (At ReadTxHistory{}) = "ReadTxHistory"
     cmdName (At PutPrivateKey{}) = "PutPrivateKey"
     cmdName (At ReadPrivateKey{}) = "ReadPrivateKey"
-    cmdName (At PutTxParameters{}) = "PutTxParameters"
-    cmdName (At ReadTxParameters{}) = "ReadTxParameters"
+    cmdName (At PutProtocolParameters{}) = "PutProtocolParameters"
+    cmdName (At ReadProtocolParameters{}) = "ReadProtocolParameters"
     cmdName (At RollbackTo{}) = "RollbackTo"
     cmdName (At RemovePendingTx{}) = "RemovePendingTx"
     cmdNames _ =
@@ -698,7 +699,7 @@ instance CommandNames (At (Cmd s)) where
         , "PutWalletMeta", "ReadWalletMeta", "PutDelegationCertificate"
         , "PutTxHistory", "ReadTxHistory", "RemovePendingTx"
         , "PutPrivateKey", "ReadPrivateKey"
-        , "PutTxParameters", "ReadTxParameters"
+        , "PutProtocolParameters", "ReadProtocolParameters"
         ]
 
 instance Functor f => Rank2.Functor (At f) where
@@ -799,6 +800,12 @@ instance ToExpr Address where
     toExpr = genericToExpr
 
 instance ToExpr TxMeta where
+    toExpr = genericToExpr
+
+instance ToExpr Percentage where
+    toExpr = genericToExpr
+
+instance ToExpr ProtocolParameters where
     toExpr = genericToExpr
 
 instance ToExpr TxParameters where

@@ -42,10 +42,10 @@ import Cardano.Wallet.Byron.Compatibility
     , fromChainHash
     , fromSlotNo
     , fromTip
+    , protocolParametersFromUpdateState
     , toEpochSlots
     , toGenTx
     , toPoint
-    , txParametersFromUpdateState
     )
 import Cardano.Wallet.Network
     ( Cursor, ErrPostTx (..), NetworkLayer (..), mapCursor )
@@ -211,12 +211,11 @@ withNetworkLayer tr np addrInfo versionData action = do
     -- doesn't really do anything but sending dummy messages to get the node's
     -- tip. It doesn't rely on the intersection to be up-to-date.
     nodeTipVar <- atomically $ newTVar TipGenesis
-    txParamsVar <- atomically $ newTVar $
-        W.txParameters $ W.protocolParameters np
+    protocolParamsVar <- atomically $ newTVar $ W.protocolParameters np
     nodeTipClient <- mkTipSyncClient tr np
         localTxSubmissionQ
         (atomically . writeTVar nodeTipVar)
-        (atomically . writeTVar txParamsVar)
+        (atomically . writeTVar protocolParamsVar)
     let handlers = retryOnConnectionLost tr
     link =<< async
         (connectClient tr handlers (const nodeTipClient) versionData addrInfo)
@@ -227,7 +226,7 @@ withNetworkLayer tr np addrInfo versionData action = do
             , nextBlocks = _nextBlocks
             , initCursor = _initCursor
             , cursorSlotId = _cursorSlotId
-            , getTxParameters = atomically $ readTVar txParamsVar
+            , getProtocolParameters = atomically $ readTVar protocolParamsVar
             , postTx = _postTx localTxSubmissionQ
             , stakeDistribution = _stakeDistribution
             , getAccountBalance = _getAccountBalance
@@ -358,15 +357,15 @@ mkTipSyncClient
         -- ^ Communication channel with the LocalTxSubmission client
     -> (Tip ByronBlock -> m ())
         -- ^ Notifier callback for when tip changes
-    -> (W.TxParameters -> m ())
+    -> (W.ProtocolParameters -> m ())
         -- ^ Notifier callback for when parameters for tip change.
     -> m (NetworkClient m)
-mkTipSyncClient tr np localTxSubmissionQ onTipUpdate onTxParamsUpdate = do
+mkTipSyncClient tr np localTxSubmissionQ onTipUpdate onProtocolParamsUpdate = do
     localStateQueryQ <- atomically newTQueue
 
-    onTxParamsUpdate' <- debounce $ \txParams -> do
-        traceWith tr $ MsgTxParameters txParams
-        onTxParamsUpdate txParams
+    onProtocolParamsUpdate' <- debounce $ \pp -> do
+        traceWith tr $ MsgProtocolParameters pp
+        onProtocolParamsUpdate pp
 
     let
         queryLocalState pt = do
@@ -377,7 +376,7 @@ mkTipSyncClient tr np localTxSubmissionQ onTipUpdate onTxParamsUpdate = do
             Left (e :: AcquireFailure) ->
                 traceWith tr $ MsgLocalStateQueryError $ show e
             Right ls ->
-                onTxParamsUpdate' $ txParametersFromUpdateState ls
+                onProtocolParamsUpdate' $ protocolParametersFromUpdateState ls
 
     onTipUpdate' <- debounce $ \tip -> do
         traceWith tr $ MsgNodeTip $ fromTip getGenesisBlockHash getEpochLength tip
@@ -546,15 +545,19 @@ notImplemented what = error ("Not implemented: " <> what)
 data NetworkLayerLog
     = MsgCouldntConnect Int
     | MsgConnectionLost (Maybe IOException)
-    | MsgTxSubmission (TraceSendRecv (LocalTxSubmission (GenTx ByronBlock) ApplyMempoolPayloadErr))
-    | MsgLocalStateQuery (TraceSendRecv (LocalStateQuery ByronBlock (Query ByronBlock)))
-    | MsgHandshakeTracer (WithMuxBearer (ConnectionId LocalAddress) HandshakeTrace)
+    | MsgTxSubmission
+        (TraceSendRecv
+            (LocalTxSubmission (GenTx ByronBlock) ApplyMempoolPayloadErr))
+    | MsgLocalStateQuery
+        (TraceSendRecv (LocalStateQuery ByronBlock (Query ByronBlock)))
+    | MsgHandshakeTracer
+        (WithMuxBearer (ConnectionId LocalAddress) HandshakeTrace)
     | MsgFindIntersection [W.BlockHeader]
     | MsgIntersectionFound (W.Hash "BlockHeader")
     | MsgFindIntersectionTimeout
     | MsgPostSealedTx W.SealedTx
     | MsgNodeTip W.BlockHeader
-    | MsgTxParameters W.TxParameters
+    | MsgProtocolParameters W.ProtocolParameters
     | MsgLocalStateQueryError String
 
 type HandshakeTrace = TraceSendRecv (Handshake NodeToClientVersion CBOR.Term)
@@ -593,8 +596,8 @@ instance ToText NetworkLayerLog where
             [ "Network node tip is"
             , pretty bh
             ]
-        MsgTxParameters params -> T.unwords
-            [ "TxParams for tip are:"
+        MsgProtocolParameters params -> T.unwords
+            [ "ProtocolParams for tip are:"
             , pretty params
             ]
         MsgLocalStateQueryError e -> T.unwords
@@ -617,5 +620,5 @@ instance HasSeverityAnnotation NetworkLayerLog where
         MsgPostSealedTx{}          -> Debug
         MsgLocalStateQuery{}       -> Debug
         MsgNodeTip{}               -> Debug
-        MsgTxParameters{}          -> Info
+        MsgProtocolParameters{}    -> Info
         MsgLocalStateQueryError{}  -> Error

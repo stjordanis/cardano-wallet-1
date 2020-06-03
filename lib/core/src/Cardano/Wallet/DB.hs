@@ -39,6 +39,7 @@ import Cardano.Wallet.Primitive.Types
     ( BlockHeader
     , DelegationCertificate
     , Hash
+    , ProtocolParameters
     , Range (..)
     , SlotId (..)
     , SortOrder (..)
@@ -115,11 +116,11 @@ data DBLayer m s k = forall stm. (MonadIO stm, MonadFail stm) => DBLayer
         -> Wallet s
         -> WalletMetadata
         -> [(Tx, TxMeta)]
-        -> TxParameters
+        -> ProtocolParameters
         -> ExceptT ErrWalletAlreadyExists stm ()
         -- ^ Initialize a database entry for a given wallet. 'putCheckpoint',
-        -- 'putWalletMeta', 'putTxHistory' or 'putTxParameters' will actually
-        -- all fail if they are called _first_ on a wallet.
+        -- 'putWalletMeta', 'putTxHistory' or 'putProtocolParameters' will
+        -- actually all fail if they are called _first_ on a wallet.
 
     , removeWallet
         :: PrimaryKey WalletId
@@ -227,16 +228,16 @@ data DBLayer m s k = forall stm. (MonadIO stm, MonadFail stm) => DBLayer
         -- ^ Read a previously stored private key and its associated passphrase
         -- hash.
 
-    , putTxParameters
+    , putProtocolParameters
         :: PrimaryKey WalletId
-        -> TxParameters
+        -> ProtocolParameters
         -> ExceptT ErrNoSuchWallet stm ()
-        -- ^ Store blockchain parameters for the node tip.
+        -- ^ Store protocol parameters for the node tip.
 
-    , readTxParameters
+    , readProtocolParameters
         :: PrimaryKey WalletId
-        -> stm (Maybe TxParameters)
-        -- ^ Read the previously stored node tip blockchain parameters.
+        -> stm (Maybe ProtocolParameters)
+        -- ^ Read the previously stored node tip protocol parameters.
 
     , rollbackTo
         :: PrimaryKey WalletId
