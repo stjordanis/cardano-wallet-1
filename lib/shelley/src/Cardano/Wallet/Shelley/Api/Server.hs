@@ -123,7 +123,7 @@ import Fmt
 import Network.Ntp
     ( NtpClient )
 import Servant
-    ( (:<|>) (..), Handler (..), Server, err400 )
+    ( (:<|>) (..), Handler (..), Server, err400, err501, throwError )
 
 server
     :: forall t n.
@@ -184,11 +184,13 @@ server byron icarus shelley spl ntp =
 
     stakePools :: Server (StakePools n ApiStakePool)
     stakePools =
-        listStakePools_
+        getStakePool_
+        :<|> listStakePools_
         :<|> joinStakePool shelley (knownPools spl)
         :<|> quitStakePool shelley
         :<|> delegationFee shelley
       where
+        getStakePool_ _ = throwError err501
         listStakePools_ = \case
             Just (ApiT stake) -> liftHandler $ listStakePools spl stake
             Nothing -> Handler $ throwE $ apiError err400 QueryParamMissing $

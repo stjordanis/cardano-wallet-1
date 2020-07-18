@@ -180,10 +180,14 @@ server byron icarus jormungandr spl ntp =
         :<|> (\_ _ -> throwError err501)
 
     stakePools :: Server (StakePools n ApiStakePool)
-    stakePools = (listPools spl)
+    stakePools =
+        getStakePool_
+        :<|> listPools spl
         :<|> joinStakePool jormungandr (knownStakePools spl)
         :<|> quitStakePool jormungandr
         :<|> delegationFee jormungandr
+      where
+        getStakePool_ _ = throwError err501
 
     byronWallets :: Server ByronWallets
     byronWallets =

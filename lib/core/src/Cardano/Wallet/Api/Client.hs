@@ -62,6 +62,7 @@ import Cardano.Wallet.Api.Types
     , ApiByronWallet
     , ApiCoinSelectionT
     , ApiFee
+    , ApiGetStakePoolData
     , ApiNetworkClock
     , ApiNetworkInformation (..)
     , ApiNetworkParameters
@@ -186,7 +187,10 @@ data AddressClient = AddressClient
     }
 
 data StakePoolClient apiPool = StakePoolClient
-    { listPools
+    { getStakePool
+        :: ApiPoolId
+        -> ClientM (ApiGetStakePoolData apiPool)
+    , listPools
         :: Maybe (ApiT Coin) -> ClientM [apiPool]
     , joinStakePool
         :: ApiPoolId
@@ -198,7 +202,6 @@ data StakePoolClient apiPool = StakePoolClient
         -> ApiWalletPassphrase
         -> ClientM (ApiTransactionT Aeson.Value)
     }
-
 
 data NetworkClient = NetworkClient
     { networkInformation
@@ -347,14 +350,16 @@ stakePoolClient
     :: forall apiPool. (Aeson.FromJSON apiPool) => StakePoolClient apiPool
 stakePoolClient =
     let
-        _listPools
+        _getStakePool
+            :<|> _listPools
             :<|> _joinStakePool
             :<|> _quitStakePool
             :<|> _delegationFee
             = client (Proxy @("v2" :> StakePools Aeson.Value apiPool))
     in
         StakePoolClient
-            { listPools = _listPools
+            { getStakePool = _getStakePool
+            , listPools = _listPools
             , joinStakePool = _joinStakePool
             , quitStakePool = _quitStakePool
             }

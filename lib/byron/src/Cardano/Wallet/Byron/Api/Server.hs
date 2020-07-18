@@ -167,6 +167,7 @@ server byron icarus ntp =
     stakePools :: Server (StakePools n ApiStakePool)
     stakePools =
              (\_ -> throwError err501)
+        :<|> (\_ -> throwError err501)
         :<|> (\_ _ _ -> throwError err501)
         :<|> (\_ _ -> throwError err501)
         :<|> (\_ -> throwError err501)

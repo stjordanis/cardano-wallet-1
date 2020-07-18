@@ -79,6 +79,7 @@ module Cardano.Wallet.Api.Types
     , ApiWalletDelegationStatus (..)
     , ApiWalletDelegationNext (..)
     , ApiPoolId (..)
+    , ApiGetStakePoolData (..)
     , ApiWalletMigrationPostData (..)
     , ApiWalletMigrationInfo (..)
     , ApiWithdrawRewards (..)
@@ -724,6 +725,11 @@ data ApiPoolId
     | ApiPoolId PoolId
     deriving (Eq, Generic, Show)
 
+newtype ApiGetStakePoolData apiPool = ApiGetStakePoolData
+    { stakePool :: apiPool
+    }
+    deriving (Eq, Generic, Show)
+
 instance FromText ApiAccountPublicKey where
     fromText txt = case xpubFromText (T.encodeUtf8 txt) of
         Left _ ->
@@ -888,6 +894,11 @@ instance FromJSON (ApiT AddressState) where
     parseJSON = fmap ApiT . genericParseJSON defaultSumTypeOptions
 instance ToJSON (ApiT AddressState) where
     toJSON = genericToJSON defaultSumTypeOptions . getApiT
+
+instance FromJSON apiPool => FromJSON (ApiGetStakePoolData apiPool) where
+    parseJSON = genericParseJSON defaultRecordTypeOptions
+instance ToJSON apiPool => ToJSON (ApiGetStakePoolData apiPool) where
+    toJSON = genericToJSON defaultRecordTypeOptions
 
 instance FromJSON ApiWallet where
     parseJSON = genericParseJSON defaultRecordTypeOptions

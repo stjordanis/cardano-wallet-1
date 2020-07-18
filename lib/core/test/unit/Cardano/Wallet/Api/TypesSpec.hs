@@ -49,6 +49,7 @@ import Cardano.Wallet.Api.Types
     , ApiCoinSelectionInput (..)
     , ApiEpochInfo (..)
     , ApiFee (..)
+    , ApiGetStakePoolData (..)
     , ApiMnemonicT (..)
     , ApiNetworkClock (..)
     , ApiNetworkInformation (..)
@@ -872,6 +873,10 @@ instance Arbitrary (Quantity "percent" Percentage) where
     shrink (Quantity p) = Quantity <$> shrinkPercentage p
     arbitrary = Quantity <$> genPercentage
 
+instance Arbitrary apiPool => Arbitrary (ApiGetStakePoolData apiPool) where
+    arbitrary = ApiGetStakePoolData <$> arbitrary
+    shrink = genericShrink
+
 instance Arbitrary ApiWallet where
     arbitrary = genericArbitrary
     shrink = genericShrink
@@ -1393,6 +1398,9 @@ specification =
 
 instance ToSchema (ApiAddress t) where
     declareNamedSchema _ = declareSchemaForDefinition "ApiAddress"
+
+instance ToSchema (ApiGetStakePoolData apiPool) where
+    declareNamedSchema _ = declareSchemaForDefinition "ApiGetStakePoolData"
 
 instance ToSchema (ApiPutAddressesData t) where
     declareNamedSchema _ = declareSchemaForDefinition "ApiPutAddressesData"
