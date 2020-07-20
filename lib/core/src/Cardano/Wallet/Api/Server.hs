@@ -74,6 +74,9 @@ module Cardano.Wallet.Api.Server
     , quitStakePool
     , selectCoins
 
+    -- * Errors
+    , ErrUnexpectedPoolIdPlaceholder (..)
+
     -- * Internals
     , LiftHandler(..)
     , apiError

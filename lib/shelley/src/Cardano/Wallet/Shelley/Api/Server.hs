@@ -44,7 +44,8 @@ import Cardano.Wallet.Api
     , Wallets
     )
 import Cardano.Wallet.Api.Server
-    ( apiError
+    ( ErrUnexpectedPoolIdPlaceholder (..)
+    , apiError
     , delegationFee
     , deleteTransaction
     , deleteWallet
@@ -88,6 +89,8 @@ import Cardano.Wallet.Api.Server
     )
 import Cardano.Wallet.Api.Types
     ( ApiErrorCode (..)
+    , ApiGetStakePoolData (..)
+    , ApiPoolId (..)
     , ApiStakePool
     , ApiT (..)
     , SomeByronWalletPostData (..)
@@ -123,7 +126,7 @@ import Fmt
 import Network.Ntp
     ( NtpClient )
 import Servant
-    ( (:<|>) (..), Handler (..), Server, err400, err501, throwError )
+    ( (:<|>) (..), Handler (..), Server, err400 )
 
 server
     :: forall t n.
@@ -190,7 +193,11 @@ server byron icarus shelley spl ntp =
         :<|> quitStakePool shelley
         :<|> delegationFee shelley
       where
-        getStakePool_ _ = throwError err501
+        getStakePool_ = \case
+            ApiPoolIdPlaceholder ->
+                liftHandler $ throwE ErrUnexpectedPoolIdPlaceholder
+            ApiPoolId pid ->
+                liftHandler $ ApiGetStakePoolData <$> getStakePool spl pid
         listStakePools_ = \case
             Just (ApiT stake) -> liftHandler $ listStakePools spl stake
             Nothing -> Handler $ throwE $ apiError err400 QueryParamMissing $

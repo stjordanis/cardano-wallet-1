@@ -123,7 +123,11 @@ import qualified Data.Text as T
 --
 
 data StakePoolLayer = StakePoolLayer
-    { knownPools
+    { getStakePool
+        :: PoolId
+        -> ExceptT ErrNetworkUnavailable IO Api.ApiStakePool
+
+    , knownPools
         :: IO [PoolId]
 
     -- | List pools based given the the amount of stake the user intends to
@@ -140,10 +144,16 @@ newStakePoolLayer
     -> DBLayer IO
     -> StakePoolLayer
 newStakePoolLayer gp nl db = StakePoolLayer
-    { knownPools = _knownPools
+    { getStakePool = _getStakePool
+    , knownPools = _knownPools
     , listStakePools = _listPools
     }
   where
+    _getStakePool
+        :: PoolId
+        -> ExceptT ErrNetworkUnavailable IO Api.ApiStakePool
+    _getStakePool = undefined
+
     _knownPools
         :: IO [PoolId]
     _knownPools = do
