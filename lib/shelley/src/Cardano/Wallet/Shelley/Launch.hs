@@ -60,8 +60,6 @@ import Cardano.Launcher.Node
     , NodePort (..)
     , withCardanoNode
     )
-import Cardano.Wallet.Byron.Compatibility
-    ( mainnetVersionData )
 import Cardano.Wallet.Logging
     ( BracketLog, bracketTracer )
 import Cardano.Wallet.Network.Ports
@@ -73,7 +71,7 @@ import Cardano.Wallet.Primitive.Types
 import Cardano.Wallet.Shelley
     ( SomeNetworkDiscriminant (..) )
 import Cardano.Wallet.Shelley.Compatibility
-    ( NodeVersionData, fromGenesisData, testnetVersionData )
+    ( NodeVersionData )
 import Cardano.Wallet.Unsafe
     ( unsafeFromHex )
 import Control.Concurrent
@@ -152,6 +150,7 @@ import Test.Utils.StaticServer
     ( withStaticServer )
 
 import qualified Cardano.Wallet.Byron.Compatibility as Byron
+import qualified Cardano.Wallet.Shelley.Compatibility as Shelley
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Types as Aeson
 import qualified Data.ByteString.Lazy as BL
@@ -170,9 +169,7 @@ import qualified Shelley.Spec.Ledger.Coin as SL
 data NetworkConfiguration where
     -- | Mainnet does not have network discrimination.
     MainnetConfig
-        :: (SomeNetworkDiscriminant, NodeVersionData)
-        -- ^ Byron mainnet configuration
-        -> FilePath
+        :: FilePath
         -- ^ Genesis data in JSON format, for shelley era.
         -> NetworkConfiguration
 
@@ -195,7 +192,7 @@ data NetworkConfiguration where
 -- | Hand-written as there's no Show instance for 'NodeVersionData'
 instance Show NetworkConfiguration where
     show = \case
-        MainnetConfig _ shelleyGenesisFile ->
+        MainnetConfig shelleyGenesisFile ->
             "MainnetConfig " <> show shelleyGenesisFile
         TestnetConfig byronGenesisFile shelleyGenesisFile ->
             "TestnetConfig " <> show (byronGenesisFile, shelleyGenesisFile)
@@ -219,9 +216,7 @@ networkConfigurationOption = mainnet <|> testnet <|> staging
     testnet = testnetFlag <*> genesisFileOption "byron" <*> genesisFileOption "shelley"
     staging = stagingFlag <*> genesisFileOption "byron" <*> genesisFileOption "shelley"
 
-    mainnetFlag = flag'
-        (MainnetConfig (SomeNetworkDiscriminant $ Proxy @'Mainnet, mainnetVersionData))
-        (long "mainnet")
+    mainnetFlag = flag' MainnetConfig (long "mainnet")
     testnetFlag = flag' TestnetConfig (long "testnet")
     stagingFlag = flag' StagingConfig (long "staging")
 
@@ -239,7 +234,7 @@ someCustomDiscriminant mkSomeNetwork pm@(ProtocolMagic n) =
     case someNatVal (fromIntegral n) of
         Just (SomeNat proxy) ->
             ( mkSomeNetwork proxy
-            , testnetVersionData pm
+            , Shelley.testnetVersionData pm
             )
         _ -> error "networkDiscriminantFlag: failed to convert \
             \ProtocolMagic to SomeNat."
@@ -249,16 +244,16 @@ parseGenesisData
     -> ExceptT String IO
         (SomeNetworkDiscriminant, NetworkParameters, NodeVersionData, Block)
 parseGenesisData = \case
-    MainnetConfig (discriminant, vData) shelleyGenesisFile -> do
-        (genesis :: ShelleyGenesis TPraosStandardCrypto)
+    MainnetConfig shelleyGenesisFile -> do
+        (shelleyGenesis :: ShelleyGenesis TPraosStandardCrypto)
             <- ExceptT $ eitherDecode <$> BL.readFile shelleyGenesisFile
+        let (_snp, _sblock0) = Shelley.fromGenesisData shelleyGenesis (Map.toList $ sgInitialFunds shelleyGenesis)
 
-        let (np, block0) = fromGenesisData genesis (Map.toList $ sgInitialFunds genesis)
         pure
-            ( discriminant
-            , np
-            , vData
-            , block0
+            ( SomeNetworkDiscriminant $ Proxy @'Mainnet
+            , Byron.mainnetNetworkParameters
+            , Byron.mainnetVersionData
+            , Byron.emptyGenesis (genesisParameters Byron.mainnetNetworkParameters)
             )
 
     TestnetConfig byronGenesisFile shelleyGenesisFile -> do
@@ -276,21 +271,22 @@ parseGenesisData = \case
         let nm = sgNetworkMagic shelleyGenesis
         let pm = ProtocolMagic $ fromIntegral nm
         let (shelleyDiscriminant, shelleyVData) = someCustomDiscriminant mkSomeNetwork pm
-        let (np, block0) = fromGenesisData shelleyGenesis (Map.toList $ sgInitialFunds shelleyGenesis)
+        let (snp, sblock0) = Shelley.fromGenesisData shelleyGenesis (Map.toList $ sgInitialFunds shelleyGenesis)
 
         let byronPm = Byron.fromProtocolMagicId $ gdProtocolMagicId genesisData
         let (_byronDiscriminant, _byronVData) = someCustomDiscriminant mkSomeNetwork byronPm
         let (bnp, bouts) = Byron.fromGenesisData (genesisData, genesisHash)
-        let _bblock0 = Byron.genesisBlockFromTxOuts (genesisParameters bnp) bouts
+        let bblock0 = Byron.genesisBlockFromTxOuts (genesisParameters bnp) bouts
 
         when (byronPm /= pm) $
-            fail "Network discriminants in genesis files to not match."
+            fail $ "Genesis files: Byron " <> show byronPm <>
+                " does not match Shelley " <> show pm
 
         pure
             ( shelleyDiscriminant
-            , np
+            , bnp
             , shelleyVData
-            , block0
+            , bblock0
             )
 
     StagingConfig byronGenesisFile _shelleyGenesisFile -> do
@@ -303,10 +299,12 @@ parseGenesisData = \case
                 -> SomeNetworkDiscriminant
             mkSomeNetwork _ = SomeNetworkDiscriminant $ Proxy @('Staging pm)
 
+        -- fixme: load byron genesis
+
         let nm = sgNetworkMagic genesis
         let pm = ProtocolMagic $ fromIntegral nm
         let (discriminant, vData) = someCustomDiscriminant mkSomeNetwork pm
-        let (np, block0) = fromGenesisData genesis (Map.toList $ sgInitialFunds genesis)
+        let (np, block0) = Shelley.fromGenesisData genesis (Map.toList $ sgInitialFunds genesis)
         pure
             ( discriminant
             , np
@@ -689,7 +687,7 @@ genConfig dir severity systemStart = do
         >>= either fail pure . Aeson.parseEither parseJSON
 
     let nm = sgNetworkMagic genesis
-    let (networkParameters, block0) = fromGenesisData genesis initialFunds
+    let (networkParameters, block0) = Shelley.fromGenesisData genesis initialFunds
     let versionData =
             ( NodeToClientVersionData $ NetworkMagic nm
             , nodeToClientCodecCBORTerm
