@@ -268,8 +268,7 @@ spec = do
 
         (c, out, err) <- postTransactionViaCLI @t ctx
             (T.unpack fixturePassphrase) args
-        (T.unpack err) `shouldContain`
-            errMsg403NotEnoughMoney (fromIntegral feeMin) 1_000_000
+        (T.unpack err) `shouldContain` errMsg403NotEnoughMoney feeMin 1_000_000
         out `shouldBe` ""
         c `shouldBe` ExitFailure 1
 
@@ -483,8 +482,7 @@ spec = do
                 ]
 
         (Exit c, Stdout out, Stderr err) <- postTransactionFeeViaCLI @t ctx args
-        err `shouldContain`
-            errMsg403NotEnoughMoney (fromIntegral feeMin) 1_000_000
+        err `shouldContain` errMsg403NotEnoughMoney feeMin 1_000_000
         out `shouldBe` ""
         c `shouldBe` ExitFailure 1
 
