@@ -1251,24 +1251,24 @@ operators = unsafePerformIO $ newMVar
           ]
       )
     , ( PoolId $ unsafeFromHex
-          "83c86ee6a465e9ca31d85627f35d8d86bf0b73436f16c5ffd398ab62"
+          "45e9d0bd8589a24e24fe51d0387baa97cb157191baa673128c8189b1"
       , Aeson.object
-          [ "type" .= Aeson.String "StakeVerificationKeyShelley_ed25519"
+          [ "type" .= Aeson.String "StakingVerificationKeyShelley"
           , "description" .= Aeson.String "Stake Verification Key"
           , "cborHex" .= Aeson.String
-              "58202f99caeb0f64696ffdf1721351f24ac72acfac1674870ef3eed39edafba70236"
+              "5820b7b2c23fe5b976806ab9fc2b53e58e8717d3d99606387bfe0cfa219a0e432586"
           ]
       , Aeson.object
-          [ "type" .= Aeson.String "StakeSigningKeyShelley_ed25519"
+          [ "type" .= Aeson.String "SigningKeyShelley"
           , "description" .= Aeson.String "Stake Signing Key"
           , "cborHex" .= Aeson.String
-              "582031dff1a162c48941fb6aedc1b77c656f3de01b4beea53b828ff0e42a7d349f4e"
+              "5820bfe99526f7041a34d50c42af1777cb49ad0136b650121eb30c854d8b5dfb6a00"
           ]
       , Aeson.object
-          [ "type" .= Aeson.String "NodeOperationalCertificateIssueCounter"
+          [ "type" .= Aeson.String "Node operational certificate issue counter"
           , "description" .= Aeson.String "Next certificate issue number: 0"
           , "cborHex" .= Aeson.String
-              "82005820a93443bbfe7f09c4b4aea30e819b9176495e037538d6f009810f491de22b4d58"
+              "820058208b1ebcad014410ffd1a1010dc80bfdfaf78696dcd0e4fd2c385135493134da72"
           ]
       , Aeson.object
           [ "name" .= Aeson.String "Genesis Pool D"
