@@ -87,6 +87,8 @@ import Control.Monad.IO.Class
     ( liftIO )
 import Control.Monad.Trans.Except
     ( ExceptT (..), runExceptT, withExceptT )
+import Control.Monad.Trans.State
+    ( State, evalState, state )
 import Control.Tracer
     ( Tracer, contramap, traceWith )
 import Data.Function
@@ -94,7 +96,7 @@ import Data.Function
 import Data.Generics.Internal.VL.Lens
     ( view )
 import Data.List
-    ( sortOn )
+    ( sortBy )
 import Data.List.NonEmpty
     ( NonEmpty (..) )
 import Data.Map
@@ -121,6 +123,8 @@ import Ouroboros.Consensus.Cardano.Block
     ( CardanoBlock, HardForkBlock (..) )
 import Ouroboros.Consensus.Shelley.Protocol
     ( TPraosCrypto )
+import System.Random
+    ( RandomGen, random )
 
 import qualified Cardano.Wallet.Api.Types as Api
 import qualified Data.List as L
@@ -187,11 +191,12 @@ newStakePoolLayer gp nl db@DBLayer {..} =
         lsqData <- combineLsqData <$> stakeDistribution nl tip userStake
         dbData <- liftIO $ readPoolDbData db
         pp <- liftIO $ getProtocolParameters nl
+        seed <- liftIO $ atomically readSystemSeed
         -- TODO:
         -- Use a more efficient way of filtering out retired pools.
         -- See: https://jira.iohk.io/projects/ADP/issues/ADP-383
         return
-            . sortOn (Down . (view (#metrics . #nonMyopicMemberRewards)))
+            $ sortByReward seed
             . filter (not . poolIsRetired)
             . map snd
             . Map.toList
@@ -213,6 +218,44 @@ newStakePoolLayer gp nl db@DBLayer {..} =
         poolRetirementEpoch p = p
             & view #retirement
             & fmap (view (#epochNumber . #getApiT))
+
+        -- Sort by non-myopic member rewards, making sure to also randomly sort
+        -- pools that have equal rewards (hence the IO).
+        --
+        -- NOTE: we discard the final value of the random generator because we
+        -- do actually want the order to be stable between two identical
+        -- requests. The order simply needs to be different between different
+        -- instances of the server.
+        sortByReward
+            :: RandomGen g
+            => g
+            -> [Api.ApiStakePool]
+            -> [Api.ApiStakePool]
+        sortByReward g0 =
+            map snd . sortBy fn . evalState' g0 . traverse withRandomWeight
+          where
+            evalState' :: s -> State s a -> a
+            evalState' = flip evalState
+
+            withRandomWeight :: RandomGen g => a -> State g (Int, a)
+            withRandomWeight a = do
+                weight <- state random
+                pure (weight, a)
+
+            -- Sort pools by descending non-myopic member rewards (i.e. pools
+            -- with larger rewards are at the beginning of the list).
+            --
+            -- In case pools have exactly the same reward, then compare them via
+            -- an weight that was randomly attributed to them. The weight may
+            -- still equal (in which case the order will depend on the sortBy
+            -- implementation, but that is fine).
+            fn :: (Int, Api.ApiStakePool) -> (Int, Api.ApiStakePool) -> Ordering
+            fn (weightA, poolA) (weightB, poolB)
+                | rewards poolA > rewards poolB = LT
+                | rewards poolA < rewards poolB = GT
+                | otherwise {- == -}            = compare weightA weightB
+              where
+                rewards = view (#metrics . #nonMyopicMemberRewards)
 
 --
 -- Data Combination functions
