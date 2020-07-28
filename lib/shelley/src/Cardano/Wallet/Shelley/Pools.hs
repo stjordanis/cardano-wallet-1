@@ -7,6 +7,7 @@
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -95,8 +96,6 @@ import Data.Function
     ( (&) )
 import Data.Generics.Internal.VL.Lens
     ( view )
-import Data.List
-    ( sortBy )
 import Data.List.NonEmpty
     ( NonEmpty (..) )
 import Data.Map
@@ -232,30 +231,20 @@ newStakePoolLayer gp nl db@DBLayer {..} =
             -> [Api.ApiStakePool]
             -> [Api.ApiStakePool]
         sortByReward g0 =
-            map snd . sortBy fn . evalState' g0 . traverse withRandomWeight
+            map stakePool
+            . L.sortOn (Down . rewards . stakePool)
+            . L.sortOn randomWeight
+            . evalState' g0
+            . traverse withRandomWeight
           where
+            (randomWeight, stakePool) = (fst, snd)
+            rewards = view (#metrics . #nonMyopicMemberRewards)
+
             evalState' :: s -> State s a -> a
             evalState' = flip evalState
 
             withRandomWeight :: RandomGen g => a -> State g (Int, a)
-            withRandomWeight a = do
-                weight <- state random
-                pure (weight, a)
-
-            -- Sort pools by descending non-myopic member rewards (i.e. pools
-            -- with larger rewards are at the beginning of the list).
-            --
-            -- In case pools have exactly the same reward, then compare them via
-            -- an weight that was randomly attributed to them. The weight may
-            -- still equal (in which case the order will depend on the sortBy
-            -- implementation, but that is fine).
-            fn :: (Int, Api.ApiStakePool) -> (Int, Api.ApiStakePool) -> Ordering
-            fn (weightA, poolA) (weightB, poolB)
-                | rewards poolA > rewards poolB = LT
-                | rewards poolA < rewards poolB = GT
-                | otherwise {- == -}            = compare weightA weightB
-              where
-                rewards = view (#metrics . #nonMyopicMemberRewards)
+            withRandomWeight a = (, a) <$> state random
 
 --
 -- Data Combination functions
