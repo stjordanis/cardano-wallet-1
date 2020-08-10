@@ -89,6 +89,8 @@ import Cardano.Wallet.DB.Sqlite.TH
     )
 import Cardano.Wallet.DB.Sqlite.Types
     ( BlockId (..), HDPassphrase (..), TxId (..) )
+import Cardano.Wallet.Logging
+    ( bracketTracer )
 import Cardano.Wallet.Primitive.AddressDerivation
     ( Depth (..)
     , DerivationType (..)
@@ -109,6 +111,8 @@ import Control.Exception
     ( Exception, bracket, throwIO )
 import Control.Monad
     ( forM, unless, void, when )
+import Control.Monad.Catch
+    ( MonadCatch )
 import Control.Monad.Extra
     ( concatMapM )
 import Control.Monad.IO.Class
@@ -120,7 +124,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
     ( MaybeT (..) )
 import Control.Tracer
-    ( Tracer, contramap, traceWith )
+    ( Tracer, contramap, natTracer, traceWith )
 import Data.Coerce
     ( coerce )
 import Data.Either
@@ -572,7 +576,7 @@ newDBLayer trace defaultFieldValues mDatabaseFile timeInterpreter = do
             res <- handleConstraint (ErrWalletAlreadyExists wid) $
                 insert_ (mkWalletEntity wid meta)
             when (isRight res) $ do
-                insertCheckpoint wid cp
+                insertCheckpoint trace wid cp
                 let (metas, txins, txouts, txws) = mkTxHistory wid txs
                 putTxMetas metas
                 putTxs txins txouts txws
@@ -594,16 +598,16 @@ newDBLayer trace defaultFieldValues mDatabaseFile timeInterpreter = do
         -----------------------------------------------------------------------}
 
         , putCheckpoint = \(PrimaryKey wid) cp -> ExceptT $ do
-            selectWallet wid >>= \case
+            observe trace "putCheckpoint:selectWallet" (selectWallet wid) >>= \case
                 Nothing -> pure $ Left $ ErrNoSuchWallet wid
-                Just _  -> Right <$> insertCheckpoint wid cp
+                Just _  -> Right <$> observe trace "putCheckpoint:insertCheckpoint" (insertCheckpoint trace wid cp)
 
         , readCheckpoint = \(PrimaryKey wid) -> do
-            selectLatestCheckpoint wid >>= \case
+            observe trace "readCheckpoint:selectLatestCheckpoint" (selectLatestCheckpoint wid) >>= \case
                 Nothing -> pure Nothing
                 Just cp -> do
-                    utxo <- selectUTxO cp
-                    s <- selectState (checkpointId cp)
+                    utxo <- observe trace "readCheckpoint:selectUTxO" (selectUTxO cp)
+                    s <- observe trace "readCheckpoint:selectState" (selectState (checkpointId cp))
                     pure (checkpointFromEntity @s cp utxo <$> s)
 
         , listCheckpoints = \(PrimaryKey wid) -> do
@@ -1161,16 +1165,17 @@ selectWallet wid =
 
 insertCheckpoint
     :: forall s. (PersistState s)
-    => W.WalletId
+    => Tracer IO DBLog
+    -> W.WalletId
     -> W.Wallet s
     -> SqlPersistT IO ()
-insertCheckpoint wid wallet = do
+insertCheckpoint tr wid wallet = do
     let (cp, utxo) = mkCheckpointEntity wid wallet
     let sl = (W.currentTip wallet) ^. #slotNo
-    deleteCheckpoints wid [CheckpointSlot ==. sl]
-    insert_ cp
-    dbChunked insertMany_ utxo
-    insertState (wid, sl) (W.getState wallet)
+    observe tr "insertCheckpoint:deleteCheckpoints" $ deleteCheckpoints wid [CheckpointSlot ==. sl]
+    observe tr "insertCheckpoint:insertCp" (insert_ cp)
+    observe tr "insertCheckpoint:insertManyUTxO" $ dbChunked insertMany_ utxo
+    observe tr "insertCheckpoint:insertState" $ insertState (wid, sl) (W.getState wallet)
 
 -- | Delete one or all checkpoints associated with a wallet.
 deleteCheckpoints
@@ -1637,3 +1642,8 @@ selectRndStatePending wid = do
   where
     assocFromEntity (RndStatePendingAddress _ accIx addrIx addr) =
         ((W.Index accIx, W.Index addrIx), addr)
+
+-- A bracket-style observer which generate a log _before_ and _after_ an action.
+observe :: (MonadCatch m, MonadIO m) => Tracer IO DBLog -> Text -> m a -> m a
+observe tr what =
+    bracketTracer (contramap (MsgObserve what) (natTracer liftIO tr))

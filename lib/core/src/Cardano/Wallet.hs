@@ -17,6 +17,12 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
+-- FIXME: temporary while trying to debug the checkpoint storage issue with
+-- exchanges. Should not be merged to `master`.
+{-# OPTIONS_GHC -fno-warn-unused-local-binds #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+{-# OPTIONS_GHC -fno-warn-unused-matches #-}
+
 -- |
 -- Copyright: © 2018-2020 IOHK
 -- License: Apache-2.0
@@ -170,6 +176,11 @@ module Cardano.Wallet
 
     -- * Logging
     , WalletLog (..)
+
+    -- * Throttler
+    , Throttler(..)
+    , newThrottler
+    , ThrottleLog(..)
     ) where
 
 import Prelude hiding
@@ -324,7 +335,7 @@ import Cardano.Wallet.Transaction
 import Cardano.Wallet.Unsafe
     ( unsafeXPrv )
 import Control.Exception
-    ( Exception )
+    ( Exception, finally )
 import Control.Monad
     ( forM, forM_, replicateM, unless, when )
 import Control.Monad.IO.Class
@@ -366,6 +377,8 @@ import Data.Generics.Labels
     ()
 import Data.Generics.Product.Typed
     ( HasType, typed )
+import Data.IORef
+    ( modifyIORef, newIORef, readIORef )
 import Data.List
     ( scanl' )
 import Data.List.NonEmpty
@@ -381,7 +394,7 @@ import Data.Set
 import Data.Text.Class
     ( ToText (..) )
 import Data.Time.Clock
-    ( UTCTime, getCurrentTime )
+    ( NominalDiffTime, UTCTime, diffUTCTime, getCurrentTime )
 import Data.Type.Equality
     ( (:~:) (..), testEquality )
 import Data.Vector.Shuffle
@@ -829,13 +842,13 @@ restoreBlocks ctx wid blocks nodeTip = db & \DBLayer{..} -> mapExceptT atomicall
         liftIO $ logDelegation delegation
         putDelegationCertificate (PrimaryKey wid) cert slotNo
 
-    let unstable = sparseCheckpoints k (nodeTip ^. #blockHeight)
+    -- let unstable = sparseCheckpoints k (nodeTip ^. #blockHeight)
 
-    forM_ (NE.init cps) $ \cp' -> do
-        let (Quantity h) = currentTip cp' ^. #blockHeight
-        when (fromIntegral h `elem` unstable) $ do
-            liftIO $ logCheckpoint cp'
-            putCheckpoint (PrimaryKey wid) cp'
+    -- forM_ (NE.init cps) $ \cp' -> do
+    --     let (Quantity h) = currentTip cp' ^. #blockHeight
+    --     when (fromIntegral h `elem` unstable) $ do
+    --         liftIO $ logCheckpoint cp'
+    --         putCheckpoint (PrimaryKey wid) cp'
 
     liftIO $ logCheckpoint (NE.last cps)
     putCheckpoint (PrimaryKey wid) (NE.last cps)
@@ -2365,6 +2378,27 @@ guardCoinSelection minUtxoValue cs@CoinSelection{outputs, change} = do
         Left (ErrUTxOTooSmall (getCoin minUtxoValue) (getCoin <$> invalidTxOuts))
 
 {-------------------------------------------------------------------------------
+                                  Throttler
+-------------------------------------------------------------------------------}
+
+
+newtype Throttler m = Throttler { throttle :: String -> m () -> m () }
+
+newThrottler
+    :: Tracer IO ThrottleLog
+    -> NominalDiffTime
+    -> IO (Throttler IO)
+newThrottler tr delay = do
+    ioref <- newIORef mempty
+    return $ Throttler $ \label action -> do
+        now  <- getCurrentTime
+        past <- Map.lookup label <$> readIORef ioref
+        let diff = maybe delay (diffUTCTime now) past
+        if diff >= delay
+            then action `finally` modifyIORef ioref (Map.insert label now)
+            else traceWith tr $ MsgThrottling label (delay - diff)
+
+{-------------------------------------------------------------------------------
                                     Logging
 -------------------------------------------------------------------------------}
 
@@ -2392,6 +2426,11 @@ data WalletLog
     | MsgRewardBalanceResult (Either ErrFetchRewards (Quantity "lovelace" Word64))
     | MsgRewardBalanceNoSuchWallet ErrNoSuchWallet
     | MsgRewardBalanceExited
+    | MsgWalletThrottling ThrottleLog
+    deriving (Show, Eq)
+
+data ThrottleLog
+    = MsgThrottling String NominalDiffTime
     deriving (Show, Eq)
 
 instance ToText WalletLog where
@@ -2464,6 +2503,13 @@ instance ToText WalletLog where
             T.pack (show err)
         MsgRewardBalanceExited ->
             "Reward balance worker has exited."
+        MsgWalletThrottling msg ->
+            toText msg
+
+instance ToText ThrottleLog where
+    toText = \case
+        MsgThrottling label remainder ->
+            T.pack $ "Throttling '" <> label <> "' for another " <> show remainder
 
 instance HasPrivacyAnnotation WalletLog
 instance HasSeverityAnnotation WalletLog where
@@ -2492,3 +2538,9 @@ instance HasSeverityAnnotation WalletLog where
         MsgRewardBalanceResult (Left _) -> Notice
         MsgRewardBalanceNoSuchWallet{} -> Warning
         MsgRewardBalanceExited -> Notice
+        MsgWalletThrottling msg -> getSeverityAnnotation msg
+
+instance HasPrivacyAnnotation ThrottleLog
+instance HasSeverityAnnotation ThrottleLog where
+    getSeverityAnnotation = \case
+        MsgThrottling{} -> Info

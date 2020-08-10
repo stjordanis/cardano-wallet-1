@@ -378,6 +378,7 @@ data DBLog
     | MsgUpdatingForeignKeysSetting ForeignKeysSetting
     | MsgFoundDatabase FilePath Text
     | MsgUnknownDBFile FilePath
+    | MsgObserve Text BracketLog
     deriving (Generic, Show, Eq, ToJSON)
 
 
@@ -454,6 +455,7 @@ instance HasSeverityAnnotation DBLog where
         MsgUpdatingForeignKeysSetting{} -> Debug
         MsgFoundDatabase _ _ -> Info
         MsgUnknownDBFile _ -> Notice
+        MsgObserve _ _ -> Notice
 
 instance ToText DBLog where
     toText = \case
@@ -512,6 +514,8 @@ instance ToText DBLog where
             [ "Found something other than a database file in "
             , "the database folder: ", T.pack file
             ]
+        MsgObserve what step ->
+            toText step <> " observing " <> what
 
 {-------------------------------------------------------------------------------
                                Extra DB Helpers
