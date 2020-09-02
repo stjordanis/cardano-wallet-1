@@ -1,4 +1,4 @@
-name: cardano-1.19.dev1
+name: cardano-1.19.dev2
 
 resolver: lts-14.25
 
@@ -87,7 +87,7 @@ packages:
   - shelley/chain-and-ledger/shelley-spec-ledger-test
 
 - git: https://github.com/input-output-hk/cardano-node
-  commit: 4814003f14340d5a1fc02f3ac15437387a7ada9f
+  commit: 420da2dfa2b5709905fb75f60427631b04b4847e
   subdirs:
   - cardano-api
   - cardano-cli
