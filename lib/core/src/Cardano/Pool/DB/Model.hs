@@ -274,8 +274,8 @@ mListPoolLifeCycleData epoch db = flip runState db $ do
             (Set.fromList retiredPools)
     sequence <$> mapM (state . mReadPoolLifeCycleStatus) nonRetiredPools
 
-mListRegisteredPools :: PoolDatabase -> ([PoolId], PoolDatabase)
-mListRegisteredPools db = (listRegisteredPools db, db)
+mListRegisteredPools :: ModelPoolOp [PoolId]
+mListRegisteredPools db = (pure $ listRegisteredPools db, db)
 
 listRegisteredPools :: PoolDatabase -> [PoolId]
 listRegisteredPools PoolDatabase {registrations} =
