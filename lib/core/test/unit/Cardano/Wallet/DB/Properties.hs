@@ -1014,21 +1014,23 @@ prop_checkpointsEventuallyEqual args@(GenSparseCheckpointsArgs cfg h) = prop
         in
             head allDBs === SparseCheckpointsDB (sparseCheckpoints cfg tip)
                 .&&.
-                conjoin (map alwaysTrue $ debugIndices $ reverse allDBs)
+                (alwaysTrue $ head allDBs)
       where
         debugIndices xs = map (first (,length xs)) $ zip [0..] xs
 
     -- Postcondition for all intermediate steps
-    alwaysTrue :: ((Int, Int), SparseCheckpointsDB) -> Property
-    alwaysTrue ((n,tot), SparseCheckpointsDB cps) = not (null cps) ==> do
+    alwaysTrue :: SparseCheckpointsDB -> Property
+    alwaysTrue (SparseCheckpointsDB cps) = not (null cps) ==> do
         let tip = last cps
         let k = epochStability cfg
         let firstUnstable = tip - k + 1
         let beforeK = filter (\x -> x <= firstUnstable && x > 0) cps
         counterexample ("Tip: " <> show tip) $
-            counterexample ("Intermediate db " <> show n <> " out of " <> show tot) $
+--            counterexample ("Prev prev db: " <> show (dbs !! (n - 2))) $
+--            counterexample ("Prev db: " <> show (dbs !! (n - 1))) $
+            counterexample ("New db: " <> show cps) $
+--            counterexample ("...which is db " <> show n <> " out of " <> show tot) $
             counterexample ("First unstable: " <> show firstUnstable) $
-            counterexample ("Cps: " <> show cps) $
             counterexample ("Cps handling max rollback: " <> show beforeK) $
 
             -- Precondition to be safe. Make it weaker later.
@@ -1086,8 +1088,8 @@ genBatches
     -> Gen Batches
 genBatches (GenSparseCheckpointsArgs cfg h) = do
     bs <- go [0..h] []
-    let e = fromIntegral $ edgeSize cfg
-    let oneByOne = pure <$> [h+1..h+e]
+    e' <- choose (0, fromIntegral $ edgeSize cfg)
+    let oneByOne = pure <$> [h+1..h+e']
     pure (Batches (bs ++ oneByOne))
   where
     go :: [Word32] -> [[Word32]] -> Gen [[Word32]]
