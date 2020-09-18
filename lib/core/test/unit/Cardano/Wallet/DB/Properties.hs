@@ -1036,6 +1036,7 @@ prop_checkpointsEventuallyEqual args@(GenSparseCheckpointsArgs cfg h) = prop
             counterexample ("First unstable: " <> show firstUnstable) $
             counterexample ("Oldest expected: " <> show older) $
             counterexample ("Cps handling max rollback: " <> show beforeK) $
+            counterexample ("Future cps: " <> show (sparseCheckpoints (cfg {edgeSize = 0 }) $ Quantity tip)) $
 
             -- Precondition to be safe. Make it weaker later.
             tip > k ==>
