@@ -10,6 +10,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -18,6 +19,10 @@
 module Cardano.Wallet.DB.Properties
     ( properties
     , withDB
+    -- TODO: remove exports when not wip V
+    , genBatches
+    , prop_checkpointsEventuallyEqual
+    , Batches (..)
     ) where
 
 import Prelude
@@ -69,6 +74,8 @@ import Cardano.Wallet.Primitive.Types
     )
 import Cardano.Wallet.Unsafe
     ( unsafeRunExceptT )
+import Control.Arrow
+    ( first )
 import Control.Concurrent.Async
     ( forConcurrently_ )
 import Control.Monad
@@ -121,6 +128,7 @@ import Test.QuickCheck
     , Property
     , checkCoverage
     , choose
+    , conjoin
     , counterexample
     , cover
     , elements
@@ -128,6 +136,7 @@ import Test.QuickCheck
     , label
     , property
     , suchThat
+    , (.&&.)
     , (===)
     , (==>)
     )
@@ -1000,10 +1009,31 @@ prop_checkpointsEventuallyEqual args@(GenSparseCheckpointsArgs cfg h) = prop
                 Quantity $ last $ mconcat batches
             emptyDB =
                 SparseCheckpointsDB []
-            SparseCheckpointsDB db =
-                L.foldr (\batch -> prune . step batch) emptyDB batches
+            allDBs =
+                scanr (\batch -> prune . step batch) emptyDB $ reverse batches
         in
-            db === sparseCheckpoints cfg tip
+            head allDBs === SparseCheckpointsDB (sparseCheckpoints cfg tip)
+                .&&.
+                conjoin (map alwaysTrue $ debugIndices $ reverse allDBs)
+      where
+        debugIndices xs = map (first (,length xs)) $ zip [0..] xs
+
+    -- Postcondition for all intermediate steps
+    alwaysTrue :: ((Int, Int), SparseCheckpointsDB) -> Property
+    alwaysTrue ((n,tot), SparseCheckpointsDB cps) = not (null cps) ==> do
+        let tip = last cps
+        let k = epochStability cfg
+        let firstUnstable = tip - k + 1
+        let beforeK = filter (\x -> x <= firstUnstable && x > 0) cps
+        counterexample ("Tip: " <> show tip) $
+            counterexample ("Intermediate db " <> show n <> " out of " <> show tot) $
+            counterexample ("First unstable: " <> show firstUnstable) $
+            counterexample ("Cps: " <> show cps) $
+            counterexample ("Cps handling max rollback: " <> show beforeK) $
+
+            -- Precondition to be safe. Make it weaker later.
+            tip > 4*k ==>
+                property (length beforeK >= 1)
 
     step :: [Word32] -> SparseCheckpointsDB -> SparseCheckpointsDB
     step cps (SparseCheckpointsDB db) =
@@ -1027,7 +1057,7 @@ prop_checkpointsEventuallyEqual args@(GenSparseCheckpointsArgs cfg h) = prop
 
 newtype Batches = Batches [[Word32]] deriving Show
 
-newtype SparseCheckpointsDB = SparseCheckpointsDB [Word32] deriving Show
+newtype SparseCheckpointsDB = SparseCheckpointsDB [Word32] deriving (Show, Eq)
 
 int :: Integral a => a -> Int
 int = fromIntegral
