@@ -400,7 +400,7 @@ sparseCheckpoints cfg blkH  =
         e = fromIntegral edgeSize
 
         minH =
-            let x = if h < (epochStability + g) then 0 else (h - epochStability - g)
+            let x = if h < epochStability then 0 else (h - epochStability)
             in g * (x `div` g)
 
         initial   = 0
