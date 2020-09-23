@@ -687,6 +687,33 @@ x-transactionMetadata: &transactionMetadata
     3: { "list": [ { "int": 14 }, { "int": 42 }, { "string": "1337" } ] }
     4: { "map": [{ "k": { "string": "key" }, "v": { "string": "value" }}, { "k": { "int": 14 }, "v": { "int": 42 } }] }
 
+x-transactionTTL: &transactionTTL
+  description: |
+    The TTL (time to live) is the time period in which the transaction
+    will be accepted into node mempools.
+
+    After the TTL has lapsed, the transaction is considered
+    expired. At this point, nodes will give up on broadcasting the
+    transaction, and the wallet will release the funds allocated to
+    the transaction so they can be used for other payments.
+
+    The TTL should be long enough that the transaction has time to be
+    propagated through the network and confirmed, but short enough so
+    that - in the event of failures - UTxO are returned to the wallet
+    in a timely manner.
+
+    If the TTL is not provided for a payment, a reasonable default
+    value will be used.
+
+  type: object
+  required:
+    - seconds
+  properties:
+    seconds:
+      type: integer
+      minimum: 0
+      description: TTL in seconds. Will be converted to a slot number internally.
+
 x-stakePoolApparentPerformance: &stakePoolApparentPerformance
   description: |
     Apparent performance of the stake pool over past epochs. This indicator is computed
@@ -1524,6 +1551,7 @@ components:
         payments: *transactionOutputs
         withdrawal: *transactionWithdrawalRequestSelf
         metadata: *transactionMetadata
+        ttl: *transactionTTL
 
     ApiPostRedemptionData: &ApiPostRedemptionData
       type: object
@@ -1553,6 +1581,7 @@ components:
         payments: *transactionOutputs
         withdrawal: *transactionWithdrawalRequestSelf
         metadata: *transactionMetadata
+        ttl: *transactionTTL
 
     ApiPostRedemptionFeeData: &ApiPostRedemptionFeeData
       type: object
