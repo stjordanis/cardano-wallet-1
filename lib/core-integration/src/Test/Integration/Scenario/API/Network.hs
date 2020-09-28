@@ -26,6 +26,8 @@ import Control.Monad
     ( when )
 import Control.Monad.IO.Class
     ( liftIO )
+import Control.Monad.Trans.Resource
+    ( runResourceT )
 import Data.Generics.Internal.VL.Lens
     ( view, (^.) )
 import Data.Maybe
@@ -76,11 +78,11 @@ spec = describe "COMMON_NETWORK" $ do
             nextEpochNum `shouldBe` currentEpochNum + 1
 
     it "NETWORK_BYRON - Byron wallet has the same tip as network/information" $
-        \ctx -> do
+        \ctx -> runResourceT @IO $ do
             let getNetworkInfo = request @ApiNetworkInformation ctx
                     Link.getNetworkInfo Default Empty
             w <- emptyRandomWallet ctx
-            eventually "Wallet has the same tip as network/information" $ do
+            liftIO $ eventually "Wallet has the same tip as network/information" $ do
                 sync <- getNetworkInfo
                 expectField (#syncProgress . #getApiT) (`shouldBe` Ready) sync
 

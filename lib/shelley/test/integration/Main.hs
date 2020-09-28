@@ -30,7 +30,7 @@ import Cardano.Startup
 import Cardano.Wallet.Api.Server
     ( Listen (..) )
 import Cardano.Wallet.Api.Types
-    ( ApiByronWallet, ApiWallet, EncodeAddress (..), WalletStyle (..) )
+    ( EncodeAddress (..) )
 import Cardano.Wallet.Logging
     ( BracketLog (..), bracketTracer, trMessageText )
 import Cardano.Wallet.Network.Ports
@@ -71,8 +71,6 @@ import Control.Concurrent.MVar
     ( newEmptyMVar, putMVar, takeMVar )
 import Control.Exception
     ( throwIO )
-import Control.Monad
-    ( forM_, void )
 import Control.Monad.IO.Class
     ( liftIO )
 import Control.Tracer
@@ -102,7 +100,7 @@ import System.FilePath
 import System.IO
     ( BufferMode (..), hSetBuffering, stdout )
 import Test.Hspec
-    ( Spec, SpecWith, after, describe, hspec, parallel )
+    ( Spec, SpecWith, describe, hspec, parallel )
 import Test.Hspec.Extra
     ( aroundAll )
 import Test.Integration.Faucet
@@ -110,12 +108,10 @@ import Test.Integration.Faucet
 import Test.Integration.Framework.Context
     ( Context (..), PoolGarbageCollectionEvent (..) )
 import Test.Integration.Framework.DSL
-    ( Headers (..), KnownCommand (..), Payload (..), request, unsafeRequest )
+    ( KnownCommand (..) )
 
 import qualified Cardano.Pool.DB as Pool
 import qualified Cardano.Pool.DB.Sqlite as Pool
-import qualified Cardano.Wallet.Api.Link as Link
-import qualified Data.Aeson as Aeson
 import qualified Data.Text as T
 import qualified Test.Integration.Scenario.API.Byron.Addresses as ByronAddresses
 import qualified Test.Integration.Scenario.API.Byron.HWWallets as ByronHWWallets
@@ -187,7 +183,7 @@ specWithServer
     :: (Tracer IO TestsLog, Tracers IO)
     -> SpecWith (Context Shelley)
     -> Spec
-specWithServer (tr, tracers) = aroundAll withContext . after tearDown
+specWithServer (tr, tracers) = aroundAll withContext
   where
     withContext :: (Context Shelley -> IO ()) -> IO ()
     withContext action = bracketTracer' tr "withContext" $ do
@@ -289,18 +285,6 @@ specWithServer (tr, tracers) = aroundAll withContext . after tearDown
                 block0
                 (gp, vData)
                 (action gp)
-
-    -- | teardown after each test (currently only deleting all wallets)
-    tearDown :: Context t -> IO ()
-    tearDown ctx = bracketTracer' tr "tearDown" $ do
-        (_, byronWallets) <- unsafeRequest @[ApiByronWallet] ctx
-            (Link.listWallets @'Byron) Empty
-        forM_ byronWallets $ \w -> void $ request @Aeson.Value ctx
-            (Link.deleteWallet @'Byron w) Default Empty
-        (_, wallets) <- unsafeRequest @[ApiWallet] ctx
-            (Link.listWallets @'Shelley) Empty
-        forM_ wallets $ \w -> void $ request @Aeson.Value ctx
-            (Link.deleteWallet @'Shelley w) Default Empty
 
 {-------------------------------------------------------------------------------
                                     Logging
