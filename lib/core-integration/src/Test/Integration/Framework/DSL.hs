@@ -581,7 +581,7 @@ waitAllTxsInLedger
     => Context t
     -> ApiWallet
     -> m ()
-waitAllTxsInLedger ctx w = liftIO $ eventually "waitAllTxsInLedger: all txs in ledger" $ do
+waitAllTxsInLedger ctx w = eventually "waitAllTxsInLedger: all txs in ledger" $ do
     let ep = Link.listTransactions @'Shelley w
     (_, txs) <- unsafeRequest @[ApiTransaction n] ctx ep Empty
     view (#status . #getApiT) <$> txs `shouldSatisfy` all (== InLedger)
@@ -593,7 +593,7 @@ waitForNextEpoch
 waitForNextEpoch ctx = do
     epoch <- getFromResponse (#nodeTip . #epochNumber) <$>
         request @ApiNetworkInformation ctx Link.getNetworkInfo Default Empty
-    liftIO $ eventually "waitForNextEpoch: goes to next epoch" $ do
+    eventually "waitForNextEpoch: goes to next epoch" $ do
         epoch' <- getFromResponse (#nodeTip . #epochNumber) <$>
             request @ApiNetworkInformation ctx Link.getNetworkInfo Default Empty
         unless (getApiT epoch' > getApiT epoch) $ fail "not yet"
@@ -664,7 +664,7 @@ a .<= b
 --
 -- It is like 'eventuallyUsingDelay', but with the default delay of 500 ms
 -- between retries.
-eventually :: String -> IO a -> IO a
+eventually :: MonadIO m => String -> IO a -> m a
 eventually = eventuallyUsingDelay (500 * ms)
   where
     ms = 1000
@@ -674,11 +674,12 @@ eventually = eventuallyUsingDelay (500 * ms)
 --
 -- It sleeps for a specified delay between retries.
 eventuallyUsingDelay
-    :: Int -- ^ Delay in microseconds
+    :: MonadIO m
+    => Int -- ^ Delay in microseconds
     -> String -- ^ Brief description of the IO action
     -> IO a
-    -> IO a
-eventuallyUsingDelay delay desc io = do
+    -> m a
+eventuallyUsingDelay delay desc io = liftIO $ do
     lastErrorRef <- newIORef Nothing
     -- NOTE
     -- This __90s__ is mostly justified by the parameters in the shelley
@@ -737,7 +738,7 @@ restoreWalletFromPubKey ctx pubKey name = snd <$> allocate create destroy
         r <- request @w ctx (Link.postWallet @style) Default payloadRestore
         expectResponseCode HTTP.status201 r
         let wid = getFromResponse id r
-        liftIO $ eventually "restoreWalletFromPubKey: wallet is 100% synced " $ do
+        eventually "restoreWalletFromPubKey: wallet is 100% synced " $ do
             rg <- request @w ctx (Link.getWallet @style wid) Default Empty
             expectField (typed @(ApiT SyncProgress) . #getApiT) (`shouldBe` Ready) rg
         return wid
@@ -929,7 +930,7 @@ rewardWallet ctx = do
     expectResponseCode HTTP.status201 r
     let w = getFromResponse id r
     waitForNextEpoch ctx
-    liftIO $ eventually "MIR wallet: wallet is 100% synced " $ do
+    eventually "MIR wallet: wallet is 100% synced " $ do
         rg <- request @ApiWallet ctx (Link.getWallet @'Shelley w) Default Empty
         verify rg
             [ expectField (#balance . #getApiT . #available . #getQuantity) (.> 0)

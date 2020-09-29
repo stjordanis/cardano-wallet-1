@@ -121,7 +121,7 @@ spec = describe "SHELLEY_HW_WALLETS" $ do
             (Link.createTransaction @'Shelley wSrc) Default payload
         expectResponseCode HTTP.status202 rTrans
 
-        liftIO $ eventually "Wallet balance is as expected" $ do
+        eventually "Wallet balance is as expected" $ do
             rGet <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             verify rGet
@@ -140,7 +140,7 @@ spec = describe "SHELLEY_HW_WALLETS" $ do
         let accXPub = pubKeyFromMnemonics mnemonics
         wDest' <- restoreWalletFromPubKey @ApiWallet @'Shelley ctx accXPub restoredWalletName
 
-        liftIO $ eventually "Balance of restored wallet is as expected" $ do
+        eventually "Balance of restored wallet is as expected" $ do
             rGet <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest') Default Empty
             verify rGet

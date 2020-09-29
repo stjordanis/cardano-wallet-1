@@ -230,7 +230,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
             , expectField (#status . #getApiT) (`shouldBe` Pending)
             ]
 
-        liftIO $ eventually "Tx is in ledger" $ do
+        eventually "Tx is in ledger" $ do
             rt <- request @([ApiTransaction n]) ctx
                 (Link.listTransactions @'Shelley wSrc) Default Empty
             verify rt
@@ -248,7 +248,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
         wSrc <- fixtureWallet ctx
         wDest <- emptyWallet ctx
 
-        liftIO $ eventually "Pending tx has pendingSince field" $ do
+        eventually "Pending tx has pendingSince field" $ do
             -- Post Tx
             let amt = (minUTxOValue :: Natural)
             r <- postTx ctx
@@ -311,7 +311,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     (.>= Quantity (faucetAmt - faucetUtxoAmt))
             ]
 
-        liftIO $ eventually "wa and wb balances are as expected" $ do
+        eventually "wa and wb balances are as expected" $ do
             rb <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wb) Default Empty
             expectField
@@ -374,7 +374,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     (#balance . #getApiT . #available)
                     (.>= Quantity (faucetAmt - 2 * faucetUtxoAmt))
             ]
-        liftIO $ eventually "wDest balance is as expected" $ do
+        eventually "wDest balance is as expected" $ do
             rd <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             verify rd
@@ -421,7 +421,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
             , expectField (#balance . #getApiT . #available) (`shouldBe` Quantity 0)
             ]
 
-        liftIO $ eventually "Wallet balance is as expected" $ do
+        eventually "Wallet balance is as expected" $ do
             rd <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             verify rd
@@ -587,7 +587,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     (.>= Quantity (faucetAmt - faucetUtxoAmt))
             ]
 
-        liftIO $ eventually "wa and wb balances are as expected" $ do
+        eventually "wa and wb balances are as expected" $ do
             rb <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wShelley) Default Empty
             expectField
@@ -622,7 +622,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                 (`shouldBe` Just (ApiT expected))
             ]
 
-        liftIO $ eventually "metadata is confirmed in transaction list" $ do
+        eventually "metadata is confirmed in transaction list" $ do
             -- on src wallet
             let linkSrcList = Link.listTransactions @'Shelley wa
             rla <- request @([ApiTransaction n]) ctx linkSrcList Default Empty
@@ -647,7 +647,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                 ]
 
         let txid = getFromResponse #id ra
-        liftIO $ eventually "metadata is confirmed in transaction get" $ do
+        eventually "metadata is confirmed in transaction get" $ do
           -- on src wallet
             let linkSrc = Link.getTransaction @'Shelley wa (ApiTxId txid)
             rg1 <- request @(ApiTransaction n) ctx linkSrc Default Empty
@@ -823,7 +823,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     | otherwise -> error "this should not happen"
                 _ -> error "this should not happen"
 
-        liftIO $ eventually "wFaucet and wSrc balances are as expected" $ do
+        eventually "wFaucet and wSrc balances are as expected" $ do
             r' <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wSrc) Default Empty
             expectField
@@ -911,7 +911,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
             @ApiTxId ctx Link.postExternalTransaction headers (payloadExt encodedSignedTx)
         expectResponseCode HTTP.status202 r6
 
-        liftIO $ eventually "wDest and wSrc balances are as expected" $ do
+        eventually "wDest and wSrc balances are as expected" $ do
             r' <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             expectField
@@ -988,7 +988,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     in (ix1, ix2)
                 _ -> error "this should not happen"
 
-        liftIO $ eventually "wFaucet and wSrc balances are as expected" $ do
+        eventually "wFaucet and wSrc balances are as expected" $ do
             r' <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wSrc) Default Empty
             expectField
@@ -1083,7 +1083,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
             @ApiTxId ctx Link.postExternalTransaction headers (payloadExt encodedSignedTx)
         expectResponseCode HTTP.status202 r7
 
-        liftIO $ eventually "wDest and wSrc balances are as expected" $ do
+        eventually "wDest and wSrc balances are as expected" $ do
             r' <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             expectField
@@ -1170,7 +1170,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     | otherwise -> error "this should not happen"
                 _ -> error "this should not happen"
 
-        liftIO $ eventually "wByron received money" $ do
+        eventually "wByron received money" $ do
             r' <- request @ApiByronWallet ctx
                 (Link.getWallet @'Byron wByron) Default Empty
             expectField
@@ -1238,7 +1238,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
             @ApiTxId ctx Link.postExternalTransaction headers (payloadExt encodedSignedTx)
         expectResponseCode HTTP.status202 r4
 
-        liftIO $ eventually "wByron and wShelley balances are as expected" $ do
+        eventually "wByron and wShelley balances are as expected" $ do
             r' <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wShelley) Default Empty
             expectField
@@ -1348,7 +1348,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
         tx <- request @(ApiTransaction n) ctx
             (Link.createTransaction @'Shelley wSrc) Default payload
         expectResponseCode HTTP.status202 tx
-        liftIO $ eventually "Wallet balance is as expected" $ do
+        eventually "Wallet balance is as expected" $ do
             rGet <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             verify rGet
@@ -1766,7 +1766,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
             , expectField (#status . #getApiT) (`shouldBe` Pending)
             ]
 
-        liftIO $ eventually "Wallet balance is as expected" $ do
+        eventually "Wallet balance is as expected" $ do
             rGet <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             verify rGet
@@ -1776,7 +1776,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                         (#balance . #getApiT . #available) (`shouldBe` Quantity amt)
                 ]
 
-        liftIO $ eventually "Transactions are available and in ledger" $ do
+        eventually "Transactions are available and in ledger" $ do
             -- Verify Tx in source wallet is Outgoing and InLedger
             let linkSrc = Link.getTransaction @'Shelley wSrc (ApiTxId txid)
             r1 <- request @(ApiTransaction n) ctx linkSrc Default Empty
@@ -1866,7 +1866,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     (`shouldBe` Quantity faucetAmt)
             ]
 
-        liftIO $ eventually "transaction eventually is in source wallet" $ do
+        eventually "transaction eventually is in source wallet" $ do
             let ep = Link.listTransactions @'Shelley wSrc
             request @[ApiTransaction n] ctx ep Default Empty >>= flip verify
                 [ expectListField 0
@@ -1875,7 +1875,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     (#status . #getApiT) (`shouldBe` InLedger)
                 ]
 
-        liftIO $ eventually "transaction eventually is in target wallet" $ do
+        eventually "transaction eventually is in target wallet" $ do
             let ep = Link.listTransactions @'Shelley wDest
             request @[ApiTransaction n] ctx ep Default Empty >>= flip verify
                 [ expectListField 0
@@ -1896,7 +1896,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
             (minUTxOValue :: Natural)
         let txid = getFromResponse #id rTx
 
-        liftIO $ eventually "Transaction is accepted" $ do
+        eventually "Transaction is accepted" $ do
             let ep = Link.listTransactions @'Shelley wSrc
             request @([ApiTransaction n]) ctx ep Default Empty >>= flip verify
                 [ expectListField 0
@@ -2016,7 +2016,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                 (`shouldSatisfy` (not . null))
             ]
 
-        liftIO $ eventually "rewards are transferred from self to self" $ do
+        eventually "rewards are transferred from self to self" $ do
             rW <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wSrc) Default payload
             print rW
@@ -2056,7 +2056,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
             ]
         let tid = getFromResponse Prelude.id rTx
 
-        liftIO $ eventually "rewards disappear from other" $ do
+        eventually "rewards disappear from other" $ do
             rWOther <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wOther) Default payload
             verify rWOther
@@ -2064,7 +2064,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     (`shouldBe` Quantity 0)
                 ]
 
-        liftIO $ eventually "withdrawal transaction is listed on other" $ do
+        eventually "withdrawal transaction is listed on other" $ do
             rTxOther <- request @(ApiTransaction n) ctx
                 (Link.getTransaction  @'Shelley wOther tid) Default payload
             verify rTxOther
@@ -2078,7 +2078,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     (`shouldBe` oneMillionAda)
                 ]
 
-        liftIO $ eventually "rewards appear on self" $ do
+        eventually "rewards appear on self" $ do
             rWSelf <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wSelf) Default payload
             verify rWSelf
@@ -2086,7 +2086,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
                     (.> (wSelf ^. #balance . #getApiT . #available))
                 ]
 
-        liftIO $ eventually "withdrawal transaction is listed on self" $ do
+        eventually "withdrawal transaction is listed on self" $ do
             rTxSelf <- request @(ApiTransaction n) ctx
                 (Link.getTransaction  @'Shelley wSelf tid) Default payload
             verify rTxSelf
@@ -2119,7 +2119,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
         -- Withdraw rewards from the other wallet.
         _ <- request @(ApiTransaction n) ctx
             (Link.createTransaction @'Shelley wSelf) Default payload
-        liftIO $ eventually "rewards disappear from other" $ do
+        eventually "rewards disappear from other" $ do
             rWOther <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wOther) Default payload
             verify rWOther
@@ -2233,7 +2233,7 @@ spec = describe "SHELLEY_TRANSACTIONS" $ do
         rM <- request @[ApiTransaction n] ctx ep Default payloadMigr
         expectResponseCode HTTP.status202 rM
 
-        liftIO $ eventually "No UTxO is on rewards wallet" $ do
+        eventually "No UTxO is on rewards wallet" $ do
             rWOther <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wRewards) Default Empty
             verify rWOther

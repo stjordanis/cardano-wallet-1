@@ -28,8 +28,6 @@ import Cardano.Wallet.Primitive.Types
     ( AddressState (..) )
 import Control.Monad
     ( forM_ )
-import Control.Monad.IO.Class
-    ( liftIO )
 import Control.Monad.Trans.Resource
     ( runResourceT )
 import Data.Generics.Internal.VL.Lens
@@ -199,7 +197,7 @@ spec = describe "SHELLEY_ADDRESSES" $ do
             expectResponseCode HTTP.status202 rTrans
 
         -- make sure all transactions are in ledger
-        liftIO $ eventually "Wallet balance = initPoolGap * minUTxOValue" $ do
+        eventually "Wallet balance = initPoolGap * minUTxOValue" $ do
             rb <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             expectField

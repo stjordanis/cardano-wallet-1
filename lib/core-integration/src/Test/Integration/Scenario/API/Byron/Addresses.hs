@@ -37,8 +37,6 @@ import Cardano.Wallet.Primitive.Types
     ( AddressState (..) )
 import Control.Monad
     ( forM_ )
-import Control.Monad.IO.Class
-    ( liftIO )
 import Control.Monad.Trans.Resource
     ( ResourceT, runResourceT )
 import Data.Generics.Internal.VL.Lens
@@ -428,7 +426,7 @@ scenario_ADDRESS_IMPORT_05 addrNum fixture = it title $ \ctx -> runResourceT $ d
         [ expectResponseCode HTTP.status204
         ]
 
-    liftIO $ eventually "Addresses are imported" $ do
+    eventually "Addresses are imported" $ do
       r1 <- request @[ApiAddress n] ctx (Link.listAddresses @'Byron w) Default Empty
       verify r1
           [ expectListSize addrNum

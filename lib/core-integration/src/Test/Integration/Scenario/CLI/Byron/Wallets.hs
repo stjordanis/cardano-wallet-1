@@ -163,7 +163,7 @@ spec = describe "BYRON_CLI_WALLETS" $ do
                 liftIO $ verify j expectations
                 let wid = T.unpack $ j ^. walletId
 
-                liftIO $ eventually "wallet is available and ready" $ do
+                eventually "wallet is available and ready" $ do
                     -- get
                     (Exit c2, Stdout out2, Stderr err2) <- getWalletViaCLI @t ctx wid
                     c2 `shouldBe` ExitSuccess

@@ -172,7 +172,7 @@ spec = describe "BYRON_WALLETS" $ do
                 liftIO $ verify r expectations
                 let w = getFromResponse id r
 
-                liftIO $ eventually "wallet is available and ready" $ do
+                eventually "wallet is available and ready" $ do
                     -- get
                     rg <- request @ApiByronWallet ctx
                         (Link.getWallet @'Byron w) Default Empty

@@ -142,7 +142,7 @@ spec = describe "BYRON_HW_WALLETS" $ do
             (Link.createTransaction @'Byron wSrc) Default payload
         expectResponseCode HTTP.status202 rTrans
 
-        liftIO $ eventually "Wallet balance is as expected" $ do
+        eventually "Wallet balance is as expected" $ do
             rGet <- request @ApiByronWallet ctx
                 (Link.getWallet @'Byron wDest) Default Empty
             verify rGet
@@ -161,7 +161,7 @@ spec = describe "BYRON_HW_WALLETS" $ do
         let accXPub = pubKeyFromMnemonics mnemonics
         wDest' <- restoreWalletFromPubKey @ApiByronWallet @'Byron ctx accXPub restoredWalletName
 
-        liftIO $ eventually "Balance of restored wallet is as expected" $ do
+        eventually "Balance of restored wallet is as expected" $ do
             rGet <- request @ApiByronWallet ctx
                 (Link.getWallet @'Byron wDest') Default Empty
             verify rGet

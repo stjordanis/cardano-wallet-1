@@ -160,7 +160,7 @@ spec = describe "SHELLEY_WALLETS" $ do
             , expectField #passphrase (`shouldNotBe` Nothing)
             ]
         let wid = getFromResponse id r
-        liftIO $ eventually "Wallet state = Ready" $ do
+        eventually "Wallet state = Ready" $ do
             rg <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wid) Default Empty
             expectField (#state . #getApiT) (`shouldBe` Ready) rg
@@ -204,7 +204,7 @@ spec = describe "SHELLEY_WALLETS" $ do
                 , expectField #passphrase (`shouldNotBe` Nothing)
                 ]
             let listWallets = Link.listWallets @'Shelley
-            liftIO $ eventually "listed wallet's state = Ready" $ do
+            eventually "listed wallet's state = Ready" $ do
                 rl <- request @[ApiWallet] ctx listWallets Default Empty
                 verify rl
                     [ expectResponseCode HTTP.status200
@@ -242,7 +242,7 @@ spec = describe "SHELLEY_WALLETS" $ do
             (Link.createTransaction @'Shelley wSrc) Default payload
         expectResponseCode HTTP.status202 rTrans
 
-        liftIO $ eventually "Wallet balance is as expected" $ do
+        eventually "Wallet balance is as expected" $ do
             rGet <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             verify rGet
@@ -259,7 +259,7 @@ spec = describe "SHELLEY_WALLETS" $ do
         -- restore and make sure funds are there
         rRestore <- postWallet ctx payldCrt
         expectResponseCode HTTP.status201 rRestore
-        liftIO $ eventually "Wallet balance is ok on restored wallet" $ do
+        eventually "Wallet balance is ok on restored wallet" $ do
             rGet <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             verify rGet
@@ -503,7 +503,7 @@ spec = describe "SHELLEY_WALLETS" $ do
     it "WALLETS_GET_01 - can get wallet details" $ \ctx -> runResourceT $ do
         w <- unsafeResponse <$> (postWallet ctx simplePayload)
 
-        liftIO $ eventually "I can get all wallet details" $ do
+        eventually "I can get all wallet details" $ do
             rg <- request @ApiWallet ctx (Link.getWallet @'Shelley w) Default Empty
             verify rg
                 [ expectResponseCode HTTP.status200
@@ -614,7 +614,7 @@ spec = describe "SHELLEY_WALLETS" $ do
                     , expectField walletId (`shouldBe` walId)
                     , expectField #passphrase (`shouldBe` passLastUpdateValue)
                     ]
-        liftIO $ eventually "Updated wallet name is available" $ do
+        eventually "Updated wallet name is available" $ do
             ru <- request @ApiWallet ctx
                 ("PUT", "v2/wallets" </> walId) Default newName
             verify ru expectations
@@ -1048,7 +1048,7 @@ spec = describe "SHELLEY_WALLETS" $ do
             (Link.createTransaction @'Shelley wSrc) Default (Json payload)
         expectResponseCode HTTP.status202 rTrans
 
-        liftIO $ eventually "Wallet balance is as expected" $ do
+        eventually "Wallet balance is as expected" $ do
             rGet <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wDest) Default Empty
             verify rGet
@@ -1247,7 +1247,7 @@ spec = describe "SHELLEY_WALLETS" $ do
             let getNetworkInfo = request @ApiNetworkInformation ctx
                     Link.getNetworkInfo Default Empty
             w <- emptyWallet ctx
-            liftIO $ eventually "Wallet has the same tip as network/information" $ do
+            eventually "Wallet has the same tip as network/information" $ do
                 sync <- getNetworkInfo
                 expectField (#syncProgress . #getApiT) (`shouldBe` Ready) sync
 

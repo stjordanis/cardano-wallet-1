@@ -82,7 +82,7 @@ spec = describe "COMMON_NETWORK" $ do
             let getNetworkInfo = request @ApiNetworkInformation ctx
                     Link.getNetworkInfo Default Empty
             w <- emptyRandomWallet ctx
-            liftIO $ eventually "Wallet has the same tip as network/information" $ do
+            eventually "Wallet has the same tip as network/information" $ do
                 sync <- getNetworkInfo
                 expectField (#syncProgress . #getApiT) (`shouldBe` Ready) sync
 

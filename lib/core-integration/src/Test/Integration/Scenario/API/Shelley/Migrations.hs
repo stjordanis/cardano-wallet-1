@@ -169,7 +169,7 @@ spec = describe "SHELLEY_MIGRATIONS" $ do
                 "passphrase": #{fixturePassphrase}
                 } |]
         wOld <- unsafeResponse <$> postWallet ctx payloadRestore
-        originalBalance <- liftIO $ eventually "wallet balance greater than 0" $ do
+        originalBalance <- eventually "wallet balance greater than 0" $ do
             r <- request @ApiWallet ctx
                 (Link.getWallet @'Shelley wOld)
                 Default
@@ -212,7 +212,7 @@ spec = describe "SHELLEY_MIGRATIONS" $ do
 
         -- Check that funds become available in the target wallet:
         let expectedBalance = originalBalance - expectedFee - leftovers
-        liftIO $ eventually "wallet balance = expectedBalance" $ do
+        eventually "wallet balance = expectedBalance" $ do
             request @ApiWallet ctx
                 (Link.getWallet @'Shelley wNew)
                 Default
@@ -270,7 +270,7 @@ spec = describe "SHELLEY_MIGRATIONS" $ do
                     "passphrase": #{fixturePassphrase}
                     } |]
             sourceWallet <- unsafeResponse <$> postWallet ctx payloadRestore
-            originalBalance <- liftIO $ eventually "wallet balance greater than 0" $ do
+            originalBalance <- eventually "wallet balance greater than 0" $ do
                 rg <- request @ApiWallet ctx
                     (Link.getWallet @'Shelley sourceWallet)
                     Default
@@ -305,7 +305,7 @@ spec = describe "SHELLEY_MIGRATIONS" $ do
 
             -- Check that funds become available in the target wallet:
             let expectedBalance = originalBalance - expectedFee
-            liftIO $ eventually "targetWallet balance = expectedBalance" $ do
+            eventually "targetWallet balance = expectedBalance" $ do
                 request @ApiWallet ctx
                     (Link.getWallet @'Shelley targetWallet)
                     Default
@@ -466,7 +466,7 @@ spec = describe "SHELLEY_MIGRATIONS" $ do
 
             -- Check that funds become available in the target wallet:
             let expectedBalance = originalBalance - expectedFee
-            liftIO $ eventually "Wallet has expectedBalance" $ do
+            eventually "Wallet has expectedBalance" $ do
                 r2 <- request @ApiWallet ctx
                     (Link.getWallet @'Shelley targetWallet) Default Empty
                 verify r2

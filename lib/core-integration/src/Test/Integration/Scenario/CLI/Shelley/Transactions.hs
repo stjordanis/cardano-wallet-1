@@ -150,7 +150,7 @@ spec = describe "SHELLEY_CLI_TRANSACTIONS" $ do
                 (.>= Quantity (faucetAmt - feeMax - amt))
             ]
 
-        liftIO $ eventually "balance on dest wallet is OK" $ do
+        eventually "balance on dest wallet is OK" $ do
             Stdout gOutDest <- getWalletViaCLI @t ctx
                 (T.unpack (wDest ^. walletId))
             destJson <- expectValidJSON (Proxy @ApiWallet) gOutDest
@@ -199,7 +199,7 @@ spec = describe "SHELLEY_CLI_TRANSACTIONS" $ do
                 (.>= Quantity (faucetAmt - feeMax - (2*amt)))
             ]
 
-        liftIO $ eventually "balance on dest wallet is OK" $ do
+        eventually "balance on dest wallet is OK" $ do
             Stdout gOutDest <- getWalletViaCLI @t ctx
                 (T.unpack (wDest ^. walletId))
             destJson <- expectValidJSON (Proxy @ApiWallet) gOutDest
@@ -335,7 +335,7 @@ spec = describe "SHELLEY_CLI_TRANSACTIONS" $ do
             , expectCliField (#metadata . #getApiTxMetadata) (`shouldBe` expected)
             ]
 
-        liftIO $ eventually "metadata is confirmed in transaction list" $ do
+        eventually "metadata is confirmed in transaction list" $ do
             (Exit code, Stdout out, Stderr err) <-
                 listTransactionsViaCLI @t ctx [T.unpack $ wSrc ^. walletId]
             err `shouldBe` "Ok.\n"
@@ -414,7 +414,7 @@ spec = describe "SHELLEY_CLI_TRANSACTIONS" $ do
         -- post transaction
         (c, _, _) <- postTransactionViaCLI @t ctx "cardano-wallet" args
         c `shouldBe` ExitSuccess
-        liftIO $ eventually "Balance on wallet is as expected" $ do
+        eventually "Balance on wallet is as expected" $ do
             Stdout gOutDest <- getWalletViaCLI @t ctx
                 (T.unpack (wDest ^. walletId))
             destJson <- expectValidJSON (Proxy @ApiWallet) gOutDest
@@ -648,7 +648,7 @@ spec = describe "SHELLEY_CLI_TRANSACTIONS" $ do
             ]
         c `shouldBe` ExitSuccess
 
-        liftIO $ eventually "Balance on wallet is as expected" $ do
+        eventually "Balance on wallet is as expected" $ do
             Stdout gOutDest <- getWalletViaCLI @t ctx
                 (T.unpack (wDest ^. walletId))
             destJson <- expectValidJSON (Proxy @ApiWallet) gOutDest
@@ -659,7 +659,7 @@ spec = describe "SHELLEY_CLI_TRANSACTIONS" $ do
                         (#balance . #getApiT . #total) (`shouldBe` Quantity amt)
                 ]
 
-        liftIO $ eventually "Transactions are available and in ledger" $ do
+        eventually "Transactions are available and in ledger" $ do
             let wSrcId = T.unpack (wSrc ^. walletId)
             let txId =  getTxId txJson
 
@@ -737,7 +737,7 @@ spec = describe "SHELLEY_CLI_TRANSACTIONS" $ do
             ]
         let txId =  getTxId txJson
 
-        liftIO $ eventually "Tx is in ledger" $ do
+        eventually "Tx is in ledger" $ do
             (fromStdout <$> listTransactionsViaCLI @t ctx [wSrcId])
                 >>= expectValidJSON (Proxy @([ApiTransaction n]))
                 >>= flip verify

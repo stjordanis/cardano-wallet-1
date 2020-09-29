@@ -20,8 +20,6 @@ import Cardano.Wallet.Primitive.Types
     ( AddressState (..) )
 import Control.Monad
     ( forM_ )
-import Control.Monad.IO.Class
-    ( liftIO )
 import Control.Monad.Trans.Resource
     ( ResourceT, runResourceT )
 import Data.Generics.Internal.VL.Lens
@@ -184,7 +182,7 @@ spec = describe "SHELLEY_CLI_ADDRESSES" $ do
             (cTx, _, _) <- postTransactionViaCLI @t ctx "cardano-wallet" args
             cTx `shouldBe` ExitSuccess
 
-        liftIO $ eventually "all transactions are in ledger" $ do
+        eventually "all transactions are in ledger" $ do
             Stdout o2 <- getWalletViaCLI @t ctx $ T.unpack (wDest ^. walletId)
             w <- expectValidJSON (Proxy @ApiWallet) o2
             expectCliField

@@ -29,8 +29,6 @@ import Cardano.Wallet.Primitive.Types
     ( AddressState (..) )
 import Control.Monad
     ( forM_ )
-import Control.Monad.IO.Class
-    ( liftIO )
 import Control.Monad.Trans.Resource
     ( ResourceT, runResourceT )
 import Data.Generics.Internal.VL.Lens
@@ -126,7 +124,7 @@ spec = describe "SHELLEY_CLI_HW_WALLETS" $ do
         _ <- expectValidJSON (Proxy @(ApiTransaction n)) op
         cp `shouldBe` ExitSuccess
 
-        liftIO $ eventually "Wallet balance is as expected" $ do
+        eventually "Wallet balance is as expected" $ do
             Stdout og <- getWalletViaCLI @t ctx $ T.unpack (wDest ^. walletId)
             jg <- expectValidJSON (Proxy @ApiWallet) og
             expectCliField (#balance . #getApiT . #available)
@@ -147,7 +145,7 @@ spec = describe "SHELLEY_CLI_HW_WALLETS" $ do
         wRestored <- expectValidJSON (Proxy @ApiWallet) o2
 
         -- make sure funds are there
-        liftIO $ eventually "Wallet balance is as expected on wallet from pubKey" $ do
+        eventually "Wallet balance is as expected on wallet from pubKey" $ do
             Stdout o3 <- getWalletViaCLI @t ctx $ T.unpack (wRestored ^. walletId)
             justRestored <- expectValidJSON (Proxy @ApiWallet) o3
             verify justRestored

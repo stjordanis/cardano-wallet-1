@@ -237,7 +237,7 @@ spec = describe "BYRON_MIGRATIONS" $ do
                 "style": "random"
                 } |]
         wOld <- unsafeResponse <$> postByronWallet ctx payloadRestore
-        originalBalance <- liftIO $ eventually "wallet balance greater than 0" $ do
+        originalBalance <- eventually "wallet balance greater than 0" $ do
             r <- request @ApiByronWallet ctx
                 (Link.getWallet @'Byron wOld)
                 Default
@@ -285,7 +285,7 @@ spec = describe "BYRON_MIGRATIONS" $ do
 
         -- Check that funds become available in the target wallet:
         let expectedBalance = originalBalance - expectedFee - leftovers
-        liftIO $ eventually "wallet balance = expectedBalance" $ do
+        eventually "wallet balance = expectedBalance" $ do
             request @ApiWallet ctx
                 (Link.getWallet @'Shelley wNew)
                 Default
@@ -377,7 +377,7 @@ spec = describe "BYRON_MIGRATIONS" $ do
                     "style": "random"
                     } |]
             sourceWallet <- unsafeResponse <$> postByronWallet ctx payloadRestore
-            liftIO $ eventually "wallet balance greater than 0" $ do
+            eventually "wallet balance greater than 0" $ do
                 request @ApiByronWallet ctx
                     (Link.getWallet @'Byron sourceWallet)
                     Default
@@ -517,7 +517,7 @@ spec = describe "BYRON_MIGRATIONS" $ do
 
             -- Check that funds become available in the target wallet:
             let expectedBalance = originalBalance - expectedFee - leftovers
-            liftIO $ eventually "Wallet has expectedBalance" $ do
+            eventually "Wallet has expectedBalance" $ do
                 r2 <- request @ApiWallet ctx
                     (Link.getWallet @'Shelley targetWallet) Default Empty
                 verify r2
