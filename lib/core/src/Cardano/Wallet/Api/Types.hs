@@ -62,6 +62,7 @@ module Cardano.Wallet.Api.Types
     , PostTransactionFeeData (..)
     , PostExternalTransactionData (..)
     , ApiTransaction (..)
+    , ApiTransactionTTL (..)
     , ApiWithdrawalPostData (..)
     , ApiFee (..)
     , ApiTxId (..)
@@ -528,17 +529,23 @@ data ByronWalletPutPassphraseData = ByronWalletPutPassphraseData
     , newPassphrase :: !(ApiT (Passphrase "raw"))
     } deriving (Eq, Generic, Show)
 
+newtype ApiTransactionTTL = ApiTransactionTTL
+    { seconds :: NominalDiffTime
+    } deriving (Eq, Generic, Show)
+
 data PostTransactionData (n :: NetworkDiscriminant) = PostTransactionData
     { payments :: !(NonEmpty (AddressAmount (ApiT Address, Proxy n)))
     , passphrase :: !(ApiT (Passphrase "lenient"))
     , withdrawal :: !(Maybe ApiWithdrawalPostData)
     , metadata :: !(Maybe (ApiT TxMetadata))
+    , ttl :: !(Maybe ApiTransactionTTL)
     } deriving (Eq, Generic, Show)
 
 data PostTransactionFeeData (n :: NetworkDiscriminant) = PostTransactionFeeData
     { payments :: (NonEmpty (AddressAmount (ApiT Address, Proxy n)))
     , withdrawal :: !(Maybe ApiWithdrawalPostData)
     , metadata :: !(Maybe (ApiT TxMetadata))
+    , ttl :: !(Maybe ApiTransactionTTL)
     } deriving (Eq, Generic, Show)
 
 newtype PostExternalTransactionData = PostExternalTransactionData
@@ -1391,6 +1398,11 @@ instance ToJSON ApiTxMetadata where
         Nothing -> Aeson.Null
         Just (ApiT md) | txMetadataIsNull md -> Aeson.Null
         Just md -> toJSON md
+
+instance FromJSON ApiTransactionTTL where
+    parseJSON = genericParseJSON defaultRecordTypeOptions
+instance ToJSON ApiTransactionTTL where
+    toJSON = genericToJSON defaultRecordTypeOptions
 
 instance (DecodeAddress n , PassphraseMaxLength s , PassphraseMinLength s) => FromJSON (ApiWalletMigrationPostData n s)
   where
