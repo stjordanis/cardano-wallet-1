@@ -146,6 +146,10 @@ module Test.Integration.Framework.DSL
     , postExternalTransactionViaCLI
     , deleteTransactionViaCLI
     , getTransactionViaCLI
+
+     -- * Re-exports
+    , runResourceT
+    , ResourceT
     ) where
 
 import Cardano.CLI
@@ -248,7 +252,7 @@ import Control.Monad.Fail
 import Control.Monad.IO.Class
     ( MonadIO, liftIO )
 import Control.Monad.Trans.Resource
-    ( ResourceT, allocate )
+    ( ResourceT, allocate, runResourceT )
 import Control.Retry
     ( capDelay, constantDelay, retrying )
 import Crypto.Hash

@@ -80,6 +80,8 @@ import Control.Concurrent.STM.TVar
     ( TVar )
 import Control.Monad
     ( mapM_, replicateM, replicateM_ )
+import Control.Monad.IO.Class
+    ( liftIO )
 import Data.Generics.Internal.VL.Lens
     ( (^.) )
 import Data.Proxy
@@ -118,6 +120,7 @@ import Test.Integration.Framework.DSL
     , json
     , minUTxOValue
     , request
+    , runResourceT
     , unsafeRequest
     , verify
     )
@@ -241,7 +244,7 @@ walletApiBench capture ctx = do
 
         rStat <- request @ApiUtxoStatistics ctx
                 (Link.getUTxOsStatistics @'Shelley wal1) Default Empty
-        expectResponseCode @IO HTTP.status200 rStat
+        expectResponseCode HTTP.status200 rStat
         expectWalletUTxO (fromIntegral <$> utxoExp) (snd rStat)
         pure (wal1, wal2)
 
@@ -258,7 +261,7 @@ walletApiBench capture ctx = do
                     (`shouldBe` amtExp)
                 ]
         rDel <- request @ApiWallet  ctx (Link.deleteWallet @'Shelley wSrc) Default Empty
-        expectResponseCode @IO HTTP.status204 rDel
+        expectResponseCode HTTP.status204 rDel
         pure ()
 
     postTx (wSrc, postTxEndp, pass) wDest amt = do
@@ -279,9 +282,7 @@ walletApiBench capture ctx = do
         expectResponseCode HTTP.status202 r
         return r
 
-    runScenario scenario = do
-        (wal1, wal2) <- scenario
-
+    runScenario scenario = runResourceT $ scenario >>= \(wal1, wal2) -> liftIO $ do
         t1 <- measureApiLogs capture
             (request @[ApiWallet] ctx (Link.listWallets @'Shelley) Default Empty)
         fmtResult "listWallets        " t1
