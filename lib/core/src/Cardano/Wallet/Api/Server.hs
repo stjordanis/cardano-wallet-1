@@ -1231,8 +1231,9 @@ postTransaction
     -> Handler (ApiTransaction n)
 postTransaction ctx genChange (ApiT wid) body = do
     let pwd = coerce $ getApiT $ body ^. #passphrase
-    let outs = coerceCoin <$> (body ^. #payments)
+    let outs = coerceCoin <$> body ^. #payments
     let md = getApiT <$> body ^. #metadata
+    let mTTL = view #seconds <$> body ^. #ttl
 
     let selfRewardCredentials (rootK, pwdP) =
             (getRawKey $ deriveRewardAccount @k pwdP rootK, pwdP)
@@ -1260,7 +1261,7 @@ postTransaction ctx genChange (ApiT wid) body = do
         pure (selection, credentials)
 
     (tx, meta, time, wit) <- withWorkerCtx ctx wid liftE liftE $ \wrk -> liftHandler $
-        W.signPayment @_ @s @t @k wrk wid genChange credentials pwd md selection
+        W.signPayment @_ @s @t @k wrk wid genChange credentials pwd md mTTL selection
 
     withWorkerCtx ctx wid liftE liftE $ \wrk -> liftHandler $
         W.submitTx @_ @s @t @k wrk wid (tx, meta, wit)
@@ -1543,7 +1544,7 @@ migrateWallet ctx (ApiT wid) migrateData = do
 
     forM migration $ \cs -> do
         (tx, meta, time, wit) <- withWorkerCtx ctx wid liftE liftE
-            $ \wrk -> liftHandler $ W.signTx @_ @s @t @k wrk wid pwd Nothing cs
+            $ \wrk -> liftHandler $ W.signTx @_ @s @t @k wrk wid pwd Nothing Nothing cs
         withWorkerCtx ctx wid liftE liftE
             $ \wrk -> liftHandler $ W.submitTx @_ @_ @t wrk wid (tx, meta, wit)
         liftIO $ mkApiTransaction

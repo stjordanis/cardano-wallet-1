@@ -279,6 +279,7 @@ import Cardano.Wallet.Primitive.Model
 import Cardano.Wallet.Primitive.Slotting
     ( PastHorizonException (..)
     , TimeInterpreter
+    , ceilingSlotAt
     , slotRangeFromTimeRange
     , startTime
     )
@@ -390,7 +391,7 @@ import Data.List
 import Data.List.NonEmpty
     ( NonEmpty )
 import Data.Maybe
-    ( fromJust, isJust, mapMaybe )
+    ( fromJust, fromMaybe, isJust, mapMaybe )
 import Data.Proxy
     ( Proxy )
 import Data.Quantity
@@ -400,7 +401,7 @@ import Data.Set
 import Data.Text.Class
     ( ToText (..) )
 import Data.Time.Clock
-    ( UTCTime, getCurrentTime )
+    ( NominalDiffTime, UTCTime, addUTCTime, getCurrentTime )
 import Data.Type.Equality
     ( (:~:) (..), testEquality )
 import Data.Vector.Shuffle
@@ -1270,15 +1271,16 @@ selectCoinsForPayment
     -> Maybe TxMetadata
     -> ExceptT (ErrSelectForPayment e) IO CoinSelection
 selectCoinsForPayment ctx wid recipients withdrawal md = do
-    (utxo, pending, txp, minUtxo) <- withExceptT ErrSelectForPaymentNoSuchWallet $
+    (utxo, pending, txp, minUtxo) <-
+        withExceptT ErrSelectForPaymentNoSuchWallet $
         selectCoinsSetup @ctx @s @k ctx wid
 
     let pendingWithdrawal = Set.lookupMin $ Set.filter hasWithdrawal pending
     when (withdrawal /= Quantity 0 && isJust pendingWithdrawal) $ throwE $
         ErrSelectForPaymentAlreadyWithdrawing (fromJust pendingWithdrawal)
 
-    cs <-
-        selectCoinsForPaymentFromUTxO @ctx @t @k @e ctx utxo txp minUtxo recipients withdrawal md
+    cs <- selectCoinsForPaymentFromUTxO @ctx @t @k @e
+        ctx utxo txp minUtxo recipients withdrawal md
     withExceptT ErrSelectForPaymentMinimumUTxOValue $ except $
         guardCoinSelection minUtxo cs
     pure cs
@@ -1298,7 +1300,8 @@ selectCoinsSetup
 selectCoinsSetup ctx wid = do
     (wal, _, pending) <- readWallet @ctx @s @k ctx wid
     txp <- txParameters <$> readWalletProtocolParameters @ctx @s @k ctx wid
-    minUTxO <- minimumUTxOvalue <$> readWalletProtocolParameters @ctx @s @k ctx wid
+    minUTxO <- minimumUTxOvalue <$>
+        readWalletProtocolParameters @ctx @s @k ctx wid
     let utxo = availableUTxO @s pending wal
     return (utxo, pending, txp, minUTxO)
 
@@ -1394,8 +1397,8 @@ estimateFeeForDelegation ctx wid = db & \DBLayer{..} -> do
         $ isStakeKeyRegistered (PrimaryKey wid)
 
     let action = if isKeyReg then Join pid else RegisterKeyAndJoin pid
-    let selectCoins =
-            selectCoinsForDelegationFromUTxO @_ @t @k ctx utxo txp minUtxo action
+    let selectCoins = selectCoinsForDelegationFromUTxO @_ @t @k
+            ctx utxo txp minUtxo action
     estimateFeeForCoinSelection $ Fee . feeBalance <$> selectCoins
   where
     db  = ctx ^. dbLayer @s @k
@@ -1508,7 +1511,8 @@ estimateFeeForPayment ctx wid recipients withdrawal md = do
     (utxo, _, txp, minUtxo) <- withExceptT ErrSelectForPaymentNoSuchWallet $
         selectCoinsSetup @ctx @s @k ctx wid
 
-    let selectCoins = selectCoinsForPaymentFromUTxO @ctx @t @k @e ctx utxo txp minUtxo recipients withdrawal md
+    let selectCoins = selectCoinsForPaymentFromUTxO @ctx @t @k @e
+            ctx utxo txp minUtxo recipients withdrawal md
 
     cs <- selectCoins `catchE` handleNotSuccessfulCoinSelection
     withExceptT ErrSelectForPaymentMinimumUTxOValue $ except $
@@ -1586,12 +1590,13 @@ signPayment
        -- ^ Reward account derived from the root key (or somewhere else).
     -> Passphrase "raw"
     -> Maybe W.TxMetadata
+    -> Maybe NominalDiffTime
     -> CoinSelection
     -> ExceptT ErrSignPayment IO (Tx, TxMeta, UTCTime, SealedTx)
-signPayment ctx wid argGenChange mkRewardAccount pwd md cs = db & \DBLayer{..} -> do
+signPayment ctx wid argGenChange mkRewardAccount pwd md ttl cs = db & \DBLayer{..} -> do
+    txExp <- liftIO $ getTxExpiry ti ttl
     withRootKey @_ @s ctx wid pwd ErrSignPaymentWithRootKey $ \xprv scheme -> do
         let pwdP = preparePassphrase scheme pwd
-        nodeTip <- withExceptT ErrSignPaymentNetwork $ currentNodeTip nl
         mapExceptT atomically $ do
             cp <- withExceptT ErrSignPaymentNoSuchWallet $ withNoSuchWallet wid $
                 readCheckpoint (PrimaryKey wid)
@@ -1601,8 +1606,9 @@ signPayment ctx wid argGenChange mkRewardAccount pwd md cs = db & \DBLayer{..} -
 
             let keyFrom = isOwned (getState cp) (xprv, pwdP)
             let rewardAcnt = mkRewardAccount (xprv, pwdP)
-            (tx, sealedTx, txExp) <- withExceptT ErrSignPaymentMkTx $ ExceptT $
-                pure $ mkStdTx tl rewardAcnt keyFrom (nodeTip ^. #slotNo) md cs'
+
+            (tx, sealedTx) <- withExceptT ErrSignPaymentMkTx $ ExceptT $
+                pure $ mkStdTx tl rewardAcnt keyFrom txExp md cs'
 
             (time, meta) <- liftIO $ mkTxMeta ti (currentTip cp) s' tx cs' txExp
             return (tx, meta, time, sealedTx)
@@ -1612,6 +1618,27 @@ signPayment ctx wid argGenChange mkRewardAccount pwd md cs = db & \DBLayer{..} -
     db = ctx ^. dbLayer @s @k
     tl = ctx ^. transactionLayer @t @k
     nl = ctx ^. networkLayer @t
+
+-- | Calculate the transaction expiry slot, given a 'TimeInterpreter', and an
+-- optional TTL in seconds.
+--
+-- If no TTL is provided, a default of 2 hours is used (note: there is no
+-- particular reason why we chose that duration).
+getTxExpiry
+    :: TimeInterpreter IO
+    -- ^ Context for time to slot calculation.
+    -> Maybe NominalDiffTime
+    -- ^ Time to live (TTL) in seconds from now.
+    -> IO SlotNo
+getTxExpiry ti maybeTTL = do
+    expTime <- addUTCTime ttl <$> getCurrentTime
+    -- fixme: this will explode if the user provides a TTL past the horizon.
+    ti $ ceilingSlotAt expTime
+  where
+    ttl = fromMaybe defaultTTL maybeTTL
+
+    defaultTTL :: NominalDiffTime
+    defaultTTL = 7200  -- that's 2 hours
 
 -- | Very much like 'signPayment', but doesn't not generate change addresses.
 signTx
@@ -1629,21 +1656,23 @@ signTx
     -> WalletId
     -> Passphrase "raw"
     -> Maybe TxMetadata
+    -> Maybe NominalDiffTime
     -> UnsignedTx (TxIn, TxOut)
     -> ExceptT ErrSignPayment IO (Tx, TxMeta, UTCTime, SealedTx)
-signTx ctx wid pwd md (UnsignedTx inpsNE outsNE) = db & \DBLayer{..} -> do
+signTx ctx wid pwd md ttl (UnsignedTx inpsNE outsNE) = db & \DBLayer{..} -> do
+    txExp <- liftIO $ getTxExpiry ti ttl
     withRootKey @_ @s ctx wid pwd ErrSignPaymentWithRootKey $ \xprv scheme -> do
         let pwdP = preparePassphrase scheme pwd
-        nodeTip <- withExceptT ErrSignPaymentNetwork $ currentNodeTip nl
         mapExceptT atomically $ do
-            cp <- withExceptT ErrSignPaymentNoSuchWallet $ withNoSuchWallet wid $
+            cp <- withExceptT ErrSignPaymentNoSuchWallet $
+                withNoSuchWallet wid $
                 readCheckpoint (PrimaryKey wid)
 
             let cs = mempty { inputs = inps, outputs = outs }
             let keyFrom = isOwned (getState cp) (xprv, pwdP)
             let rewardAcnt = getRawKey $ deriveRewardAccount @k pwdP xprv
-            (tx, sealedTx, txExp) <- withExceptT ErrSignPaymentMkTx $ ExceptT $
-                pure $ mkStdTx tl (rewardAcnt, pwdP) keyFrom (nodeTip ^. #slotNo) md cs
+            (tx, sealedTx) <- withExceptT ErrSignPaymentMkTx $ ExceptT $
+                pure $ mkStdTx tl (rewardAcnt, pwdP) keyFrom txExp md cs
 
             (time, meta) <- liftIO $
                 mkTxMeta ti (currentTip cp) (getState cp) tx cs txExp
@@ -1751,7 +1780,7 @@ signDelegation
     -> DelegationAction
     -> ExceptT ErrSignDelegation IO (Tx, TxMeta, UTCTime, SealedTx)
 signDelegation ctx wid argGenChange pwd coinSel action = db & \DBLayer{..} -> do
-    nodeTip <- withExceptT ErrSignDelegationNetwork $ currentNodeTip nl
+    expirySlot <- liftIO $ getTxExpiry ti Nothing
     withRootKey @_ @s ctx wid pwd ErrSignDelegationWithRootKey $ \xprv scheme -> do
         let pwdP = preparePassphrase scheme pwd
         mapExceptT atomically $ do
@@ -1764,31 +1793,31 @@ signDelegation ctx wid argGenChange pwd coinSel action = db & \DBLayer{..} -> do
 
             let rewardAcnt = getRawKey $ deriveRewardAccount @k pwdP xprv
             let keyFrom = isOwned (getState cp) (xprv, pwdP)
-            (tx, sealedTx, txExp) <- withExceptT ErrSignDelegationMkTx $ ExceptT $ pure $
+            (tx, sealedTx) <- withExceptT ErrSignDelegationMkTx $ ExceptT $ pure $
                 case action of
                     RegisterKeyAndJoin poolId ->
                         mkDelegationJoinTx tl poolId
                             (rewardAcnt, pwdP)
                             keyFrom
-                            (nodeTip ^. #slotNo)
+                            expirySlot
                             coinSel'
 
                     Join poolId ->
                         mkDelegationJoinTx tl poolId
                             (rewardAcnt, pwdP)
                             keyFrom
-                            (nodeTip ^. #slotNo)
+                            expirySlot
                             coinSel'
 
                     Quit ->
                         mkDelegationQuitTx tl
                             (rewardAcnt, pwdP)
                             keyFrom
-                            (nodeTip ^. #slotNo)
+                            expirySlot
                             coinSel'
 
             (time, meta) <- liftIO $
-                mkTxMeta ti (currentTip cp) s' tx coinSel' txExp
+                mkTxMeta ti (currentTip cp) s' tx coinSel' expirySlot
             return (tx, meta, time, sealedTx)
   where
     ti :: TimeInterpreter IO

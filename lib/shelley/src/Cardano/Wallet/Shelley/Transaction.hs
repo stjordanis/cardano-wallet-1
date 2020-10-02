@@ -177,20 +177,19 @@ mkTx
     => Cardano.NetworkId
     -> TxPayload Cardano.Shelley
     -> SlotNo
-    -- ^ Tip of chain, for calculating TTL
+    -- ^ Slot at which the transaction will expire.
     -> (XPrv, Passphrase "encryption")
     -- ^ Reward account
     -> (Address -> Maybe (k 'AddressK XPrv, Passphrase "encryption"))
     -> CoinSelection
-    -> Either ErrMkTx (Tx, SealedTx, SlotNo)
-mkTx networkId (TxPayload md certs mkExtraWits) tip (rewardAcnt, pwdAcnt) keyFrom cs = do
+    -> Either ErrMkTx (Tx, SealedTx)
+mkTx networkId (TxPayload md certs mkExtraWits) expirySlot (rewardAcnt, pwdAcnt) keyFrom cs = do
     let wdrls = mkWithdrawals
             networkId
             (toChimericAccountRaw . toXPub $ rewardAcnt)
             (withdrawal cs)
 
-    let timeToLive = defaultTTL tip
-    let unsigned = mkUnsignedTx timeToLive cs md wdrls certs
+    let unsigned = mkUnsignedTx expirySlot cs md wdrls certs
 
     wits <- case (txWitnessTagFor @k) of
         TxWitnessShelleyUTxO -> do
@@ -212,8 +211,7 @@ mkTx networkId (TxPayload md certs mkExtraWits) tip (rewardAcnt, pwdAcnt) keyFro
             pure $ bootstrapWits <> mkExtraWits unsigned
 
     let signed = Cardano.makeSignedTransaction wits unsigned
-    let (tx, sealed) = sealShelleyTx signed
-    return (tx, sealed, timeToLive)
+    return $ sealShelleyTx signed
 
 newTransactionLayer
     :: forall k t.
@@ -257,12 +255,12 @@ newTransactionLayer networkId = TransactionLayer
         -> (Address -> Maybe (k 'AddressK XPrv, Passphrase "encryption"))
             -- ^ Key store
         -> SlotNo
-            -- ^ Tip of the chain, for TTL
+            -- ^ TTL slot
         -> CoinSelection
             -- ^ A balanced coin selection where all change addresses have been
             -- assigned.
-        -> Either ErrMkTx (Tx, SealedTx, SlotNo)
-    _mkDelegationJoinTx poolId acc@(accXPrv, pwd') keyFrom tip cs = do
+        -> Either ErrMkTx (Tx, SealedTx)
+    _mkDelegationJoinTx poolId acc@(accXPrv, pwd') keyFrom ttl cs = do
         let accXPub = toXPub accXPrv
         let certs =
                 if deposit cs > 0 then
@@ -277,7 +275,7 @@ newTransactionLayer networkId = TransactionLayer
                 ]
 
         let payload = TxPayload Nothing certs mkWits
-        mkTx networkId payload tip acc keyFrom cs
+        mkTx networkId payload ttl acc keyFrom cs
 
     _mkDelegationQuitTx
         :: (XPrv, Passphrase "encryption")
@@ -285,12 +283,12 @@ newTransactionLayer networkId = TransactionLayer
         -> (Address -> Maybe (k 'AddressK XPrv, Passphrase "encryption"))
             -- Key store
         -> SlotNo
-            -- Tip of the chain, for TTL
+            -- TTL slot
         -> CoinSelection
             -- A balanced coin selection where all change addresses have been
             -- assigned.
-        -> Either ErrMkTx (Tx, SealedTx, SlotNo)
-    _mkDelegationQuitTx acc@(accXPrv, pwd') keyFrom tip cs = do
+        -> Either ErrMkTx (Tx, SealedTx)
+    _mkDelegationQuitTx acc@(accXPrv, pwd') keyFrom ttl cs = do
         let accXPub = toXPub accXPrv
         let certs = [toStakeKeyDeregCert accXPub]
         let mkWits unsigned =
@@ -298,7 +296,7 @@ newTransactionLayer networkId = TransactionLayer
                 ]
 
         let payload = TxPayload Nothing certs mkWits
-        mkTx networkId payload tip acc keyFrom cs
+        mkTx networkId payload ttl acc keyFrom cs
 
 _estimateMaxNumberOfInputs
     :: forall k. TxWitnessTagFor k
@@ -567,12 +565,6 @@ mkWithdrawals networkId acc amount
   where
     cred = toCardanoStakeCredential acc
     stakeAddress = Cardano.makeStakeAddress networkId cred
-
--- NOTE: The (+7200) was selected arbitrarily when we were trying to get
--- this working on the FF testnet. Perhaps a better motivated and/or
--- configurable value would be better.
-defaultTTL :: SlotNo -> SlotNo
-defaultTTL = (+ 7200)
 
 mkShelleyWitness
     :: Cardano.TxBody Cardano.Shelley
