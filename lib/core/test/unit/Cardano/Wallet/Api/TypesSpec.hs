@@ -66,6 +66,7 @@ import Cardano.Wallet.Api.Types
     , ApiStakePoolMetrics (..)
     , ApiT (..)
     , ApiTransaction (..)
+    , ApiTransactionTTL (..)
     , ApiTxId (..)
     , ApiTxInput (..)
     , ApiTxMetadata (..)
@@ -754,6 +755,7 @@ spec = do
                     , passphrase = passphrase (x :: PostTransactionData ('Testnet 0))
                     , withdrawal = withdrawal (x :: PostTransactionData ('Testnet 0))
                     , metadata = metadata (x :: PostTransactionData ('Testnet 0))
+                    , ttl = ttl (x :: PostTransactionData ('Testnet 0))
                     }
             in
                 x' === x .&&. show x' === show x
@@ -763,6 +765,7 @@ spec = do
                     { payments = payments (x :: PostTransactionFeeData ('Testnet 0))
                     , withdrawal = withdrawal (x :: PostTransactionFeeData ('Testnet 0))
                     , metadata = metadata (x :: PostTransactionFeeData ('Testnet 0))
+                    , ttl = ttl (x :: PostTransactionFeeData ('Testnet 0))
                     }
             in
                 x' === x .&&. show x' === show x
@@ -1330,11 +1333,15 @@ instance Arbitrary a => Arbitrary (AddressAmount a) where
     arbitrary = applyArbitrary2 AddressAmount
     shrink _ = []
 
+instance Arbitrary ApiTransactionTTL where
+    arbitrary = ApiTransactionTTL . fromIntegral @Int <$> choose (0, 10000)
+
 instance Arbitrary (PostTransactionData t) where
     arbitrary = PostTransactionData
         <$> arbitrary
         <*> arbitrary
         <*> elements [Just SelfWithdrawal, Nothing]
+        <*> arbitrary
         <*> arbitrary
 
 instance Arbitrary ApiWithdrawalPostData where
@@ -1351,6 +1358,7 @@ instance Arbitrary (PostTransactionFeeData t) where
     arbitrary = PostTransactionFeeData
         <$> arbitrary
         <*> elements [Just SelfWithdrawal, Nothing]
+        <*> arbitrary
         <*> arbitrary
 
 instance Arbitrary PostExternalTransactionData where
