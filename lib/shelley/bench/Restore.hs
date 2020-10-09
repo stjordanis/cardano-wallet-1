@@ -498,7 +498,7 @@ bench_restoration proxy tr socket np vData wallets benchmarks = do
                         liftIO . B8.hPut h . T.encodeUtf8 . (<> "\n") $ msg
                         hFlush h
                 let w = WalletLayer
-                        (traceProgressForPlotting fileTr)
+                        nullTracer
                         (emptyGenesis gp, np, mkSyncTolerance 3600)
                         nw
                         tl
@@ -509,7 +509,7 @@ bench_restoration proxy tr socket np vData wallets benchmarks = do
                     void $ forkIO $ unsafeRunExceptT $ W.restoreWallet @_ @s @t @k w wid
 
                 (_, _restorationTime) <- bench "restoration" $ do
-                    waitForWalletSync tr proxy w (map fst' wallets) gp vData
+                    waitForWalletSync fileTr proxy w (map fst' wallets) gp vData
 
                 --results <- benchmarks proxy w wid wname restorationTime
                 --Aeson.encodeFile resultsFilepath results
@@ -530,12 +530,12 @@ dummyAddress
     | otherwise =
         Address $ BS.pack $ 1 : replicate 56 0
 
-traceProgressForPlotting :: Tracer IO Text -> Tracer IO WalletLog
-traceProgressForPlotting tr = Tracer $ \case
+traceProgressForPlotting :: Int -> Tracer IO Text -> Tracer IO WalletLog
+traceProgressForPlotting i tr = Tracer $ \case
     MsgFollow (MsgApplyBlocks bs) -> do
         let tip = pretty . getQuantity . blockHeight . NE.last $ bs
         time <- pretty . utcTimeToPOSIXSeconds <$> getCurrentTime
-        traceWith tr (time <> " " <> tip)
+        traceWith tr (time <> " " <> T.pack (show i) <> " " <> tip)
     _ -> return ()
 
 withBenchDBLayer
@@ -585,7 +585,7 @@ prepareNode tr proxy socketPath np vData = do
 -- wallet reaches 100%.
 waitForWalletSync
     :: forall s t k n. (NetworkDiscriminantVal n)
-    => Tracer IO (BenchmarkLog n)
+    => Tracer IO Text
     -> Proxy n
     -> WalletLayer s t k
     -> [WalletId]
@@ -595,12 +595,15 @@ waitForWalletSync
 waitForWalletSync tr proxy walletLayer wids gp vData = do
     let tolerance = mkSyncTolerance 3600
     now  <- getCurrentTime
-    progress <- forM wids $ \wid -> do
+    progress <- forM (zip [0::Int ..] wids) $ \(i, wid) -> do
         w <- fmap fst' <$> unsafeRunExceptT $ W.readWallet walletLayer wid
+        let Quantity bh = blockHeight $ currentTip w
+        traceWith tr (T.pack (show now) <> " " <> T.pack (show i) <> " " <> T.pack (show bh))
         syncProgress tolerance (timeInterpreter nl) (currentTip w) now
 
     putStrLn $ fmt (listF progress)
     threadDelay 1000000
+
     waitForWalletSync tr proxy walletLayer wids gp vData
   where
     WalletLayer _ _ nl _ _ = walletLayer
