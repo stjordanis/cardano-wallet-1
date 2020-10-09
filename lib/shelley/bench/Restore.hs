@@ -595,10 +595,11 @@ waitForWalletSync
 waitForWalletSync tr proxy walletLayer wids gp vData = do
     let tolerance = mkSyncTolerance 3600
     now  <- getCurrentTime
+    posixNow <- pretty . utcTimeToPOSIXSeconds <$> getCurrentTime
     progress <- forM (zip [0::Int ..] wids) $ \(i, wid) -> do
         w <- fmap fst' <$> unsafeRunExceptT $ W.readWallet walletLayer wid
         let Quantity bh = blockHeight $ currentTip w
-        traceWith tr (T.pack (show now) <> " " <> T.pack (show i) <> " " <> T.pack (show bh))
+        traceWith tr (posixNow <> " " <> T.pack (show i) <> " " <> T.pack (show bh))
         syncProgress tolerance (timeInterpreter nl) (currentTip w) now
 
     putStrLn $ fmt (listF progress)
