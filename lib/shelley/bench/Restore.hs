@@ -45,7 +45,7 @@ import Cardano.BM.Trace
 import Cardano.DB.Sqlite
     ( destroyDBLayer )
 import Cardano.Mnemonic
-    ( EntropySize, MnemonicWords (..), SomeMnemonic (..), entropyToMnemonic )
+    ( SomeMnemonic (..), entropyToMnemonic )
 import Cardano.Wallet
     ( WalletLayer (..), WalletLog (..) )
 import Cardano.Wallet.Api.Types
@@ -84,7 +84,7 @@ import Cardano.Wallet.Primitive.AddressDerivation.Shelley
 import Cardano.Wallet.Primitive.AddressDiscovery
     ( CompareDiscovery, GenChange (..), IsOurs, IsOwned, KnownAddresses )
 import Cardano.Wallet.Primitive.AddressDiscovery.Random
-    ( RndAnyState, mkRndAnyState )
+    ( RndAnyState )
 import Cardano.Wallet.Primitive.AddressDiscovery.Sequential
     ( AddressPoolGap, SeqAnyState (..), mkAddressPoolGap, mkSeqAnyState )
 import Cardano.Wallet.Primitive.Model
@@ -121,9 +121,9 @@ import Cardano.Wallet.Shelley.Network
 import Cardano.Wallet.Shelley.Transaction
     ( TxWitnessTagFor (..), newTransactionLayer )
 import Cardano.Wallet.Unsafe
-    ( unsafeMkEntropy )
+    ( unsafeMkEntropy, unsafeMkPercentage )
 import Cardano.Wallet.Unsafe
-    ( unsafeMkMnemonic, unsafeRunExceptT )
+    ( unsafeRunExceptT )
 import Control.Arrow
     ( first )
 import Control.Concurrent
@@ -144,8 +144,6 @@ import Crypto.Hash.Utils
     ( blake2b256 )
 import Data.Aeson
     ( ToJSON (..), genericToJSON, (.=) )
-import Data.Coerce
-    ( coerce )
 import Data.List
     ( foldl' )
 import Data.List.NonEmpty
@@ -165,7 +163,6 @@ import Fmt
 import Fmt
     ( Buildable
     , blockListF'
-    , build
     , genericF
     , nameF
     , pretty
@@ -231,7 +228,7 @@ cardanoRestoreBench tr c socketFile = do
             vData
             (map
                 (\i -> walletSeq ("w" <> T.pack (show i)) $ mkSeqAnyState' @0 networkProxy)
-                [0..3 :: Int])
+                [0..50 :: Int])
             benchmarksSeq
         ]
 
@@ -512,11 +509,11 @@ bench_restoration proxy tr socket np vData wallets benchmarks = do
                 (_, restorationTime) <- bench "restoration" $ do
                     waitForWalletSync fileTr proxy w (map fst' wallets) gp vData
 
-                let (wid, wname, _) = head wallets
-                let wal = unsafeRunExceptT $ W.readWallet w wid
-                results <- benchmarks proxy w wid wname restorationTime
+                let (wid0, wname0, _) = head wallets
+                results <- benchmarks proxy w wid0 wname0 restorationTime
                 Aeson.encodeFile resultsFilepath results
-                unsafeRunExceptT (W.deleteWallet w wid)
+                forM_ wallets $ \(wid, _, _) ->
+                    unsafeRunExceptT (W.deleteWallet w wid)
                 pure $ SomeBenchmarkResults ()
   where
     fst' (x,_,_) = x
@@ -608,7 +605,7 @@ waitForWalletSync tr proxy walletLayer wids gp vData = do
     putStrLn $ fmt (listF progress)
     threadDelay 1000000
 
-    if all (== Ready) progress
+    if all (> Syncing (Quantity $ unsafeMkPercentage 0.01)) progress
     then return ()
     else waitForWalletSync tr proxy walletLayer wids gp vData
   where
