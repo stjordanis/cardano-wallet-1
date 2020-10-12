@@ -231,7 +231,7 @@ cardanoRestoreBench tr c socketFile = do
             vData
             (map
                 (\i -> walletSeq ("w" <> T.pack (show i)) $ mkSeqAnyState' @0 networkProxy)
-                [0..10 :: Int])
+                [0..3 :: Int])
             benchmarksSeq
         ]
 
@@ -504,22 +504,25 @@ bench_restoration proxy tr socket np vData wallets benchmarks = do
                         tl
                         db
 
-                wallets' <- forM_ wallets $ \(wid, wname, s) -> do
+                forM_ wallets $ \(wid, wname, s) -> do
                     unsafeRunExceptT $ W.createWallet w wid wname s
                     void $ forkIO $ unsafeRunExceptT $ W.restoreWallet @_ @s @t @k w wid
 
-                (_, _restorationTime) <- bench "restoration" $ do
+                -- NOTE: This is now the time to restore /all/ wallets.
+                (_, restorationTime) <- bench "restoration" $ do
                     waitForWalletSync fileTr proxy w (map fst' wallets) gp vData
 
-                --results <- benchmarks proxy w wid wname restorationTime
-                --Aeson.encodeFile resultsFilepath results
-                --unsafeRunExceptT (W.deleteWallet w wid)
+                let (wid, wname, _) = head wallets
+                let wal = unsafeRunExceptT $ W.readWallet w wid
+                results <- benchmarks proxy w wid wname restorationTime
+                Aeson.encodeFile resultsFilepath results
+                unsafeRunExceptT (W.deleteWallet w wid)
                 pure $ SomeBenchmarkResults ()
   where
     fst' (x,_,_) = x
     basename = "foo"
     timelogFilepath = basename <> ".timelog"
-    --resultsFilepath = basename <> ".json"
+    resultsFilepath = basename <> ".json"
 
 dummyAddress
     :: forall (n :: NetworkDiscriminant). NetworkDiscriminantVal n
@@ -605,7 +608,9 @@ waitForWalletSync tr proxy walletLayer wids gp vData = do
     putStrLn $ fmt (listF progress)
     threadDelay 1000000
 
-    waitForWalletSync tr proxy walletLayer wids gp vData
+    if all (== Ready) progress
+    then return ()
+    else waitForWalletSync tr proxy walletLayer wids gp vData
   where
     WalletLayer _ _ nl _ _ = walletLayer
     fst' (x,_,_) = x
