@@ -114,6 +114,7 @@ module Test.Integration.Framework.DSL
     , rootPrvKeyFromMnemonics
     , unsafeGetTransactionTime
     , getTxId
+    , getWalletKey
 
     -- * Delegation helpers
     , mkEpochInfo
@@ -174,6 +175,7 @@ import Cardano.Wallet.Api.Types
     , ApiTransaction
     , ApiTxId (ApiTxId)
     , ApiUtxoStatistics (..)
+    , ApiVerificationKeyHash
     , ApiWallet
     , ApiWalletDelegation (..)
     , ApiWalletDelegationNext (..)
@@ -212,6 +214,7 @@ import Cardano.Wallet.Primitive.Types
     ( ActiveSlotCoefficient (..)
     , Address (..)
     , Coin (..)
+    , DerivationIndex
     , EpochLength (..)
     , EpochNo
     , Hash (..)
@@ -1347,6 +1350,17 @@ listAddresses ctx w = do
     let link = Link.listAddresses @'Shelley w
     (_, addrs) <- unsafeRequest @[ApiAddress n] ctx link Empty
     return addrs
+
+getWalletKey
+    :: forall t w. ( HasType (ApiT WalletId) w )
+    => Context t
+    -> w
+    -> ApiT DerivationIndex
+    -> IO ApiVerificationKeyHash
+getWalletKey ctx w index = do
+    let link = Link.getWalletKey w index
+    (_, keyHash) <- unsafeRequest @ApiVerificationKeyHash ctx link Empty
+    return keyHash
 
 listAllTransactions
     :: forall n t w.
