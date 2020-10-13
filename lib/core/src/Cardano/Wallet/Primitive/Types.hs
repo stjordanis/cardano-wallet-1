@@ -1194,6 +1194,9 @@ instance NFData DerivationIndex
 instance FromText DerivationIndex where
     fromText = fmap DerivationIndex . fromText
 
+instance ToText DerivationIndex where
+    toText (DerivationIndex index) = toText index
+
 {-------------------------------------------------------------------------------
                                      Coin
 -------------------------------------------------------------------------------}
