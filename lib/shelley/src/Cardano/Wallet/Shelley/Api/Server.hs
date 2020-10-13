@@ -134,7 +134,14 @@ import Fmt
 import Network.Ntp
     ( NtpClient )
 import Servant
-    ( (:<|>) (..), Handler (..), NoContent (..), Server, err400 )
+    ( (:<|>) (..)
+    , Handler (..)
+    , NoContent (..)
+    , Server
+    , err400
+    , err501
+    , throwError
+    )
 import Servant.Server
     ( ServerError (..) )
 import Type.Reflection
@@ -158,6 +165,7 @@ server
     -> Server (Api n ApiStakePool)
 server byron icarus shelley spl ntp =
          wallets
+    :<|> (\ _ _ -> throwError err501)
     :<|> addresses
     :<|> coinSelections
     :<|> transactions
