@@ -42,6 +42,7 @@ import Cardano.Wallet.Api
     , ShelleyMigrations
     , StakePools
     , Transactions
+    , WalletKeys
     , Wallets
     )
 import Cardano.Wallet.Api.Server
@@ -57,6 +58,7 @@ import Cardano.Wallet.Api.Server
     , getTransaction
     , getUTxOsStatistics
     , getWallet
+    , getWalletKeyHash
     , idleWorker
     , joinStakePool
     , liftHandler
@@ -134,14 +136,7 @@ import Fmt
 import Network.Ntp
     ( NtpClient )
 import Servant
-    ( (:<|>) (..)
-    , Handler (..)
-    , NoContent (..)
-    , Server
-    , err400
-    , err501
-    , throwError
-    )
+    ( (:<|>) (..), Handler (..), NoContent (..), Server, err400 )
 import Servant.Server
     ( ServerError (..) )
 import Type.Reflection
@@ -165,7 +160,7 @@ server
     -> Server (Api n ApiStakePool)
 server byron icarus shelley spl ntp =
          wallets
-    :<|> (\ _ _ -> throwError err501)
+    :<|> walletKeys
     :<|> addresses
     :<|> coinSelections
     :<|> transactions
@@ -188,6 +183,9 @@ server byron icarus shelley spl ntp =
         :<|> putWallet shelley mkShelleyWallet
         :<|> putWalletPassphrase shelley
         :<|> getUTxOsStatistics shelley
+
+    walletKeys :: Server WalletKeys
+    walletKeys = getWalletKeyHash shelley
 
     addresses :: Server (Addresses n)
     addresses = listAddresses shelley (normalizeDelegationAddress @_ @ShelleyKey @n)
