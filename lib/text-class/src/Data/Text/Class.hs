@@ -35,7 +35,7 @@ module Data.Text.Class
 import Prelude
 
 import Control.Monad
-    ( unless )
+    ( unless, (<=<) )
 import Data.Bifunctor
     ( first )
 import Data.List
@@ -48,6 +48,8 @@ import Data.Text
     ( Text )
 import Data.Text.Read
     ( decimal, signed )
+import Data.Word
+    ( Word32 )
 import Fmt
     ( Buildable )
 import GHC.Generics
@@ -114,6 +116,19 @@ instance FromText Natural where
         err = TextDecodingError "Expecting natural number"
 
 instance ToText Natural where
+    toText = T.pack . show
+
+instance FromText Word32 where
+    fromText =
+        validate <=< (fmap fromIntegral . fromText @Natural)
+      where
+        validate x
+            | (x >= (minBound @Word32)) && (x <= (maxBound @Word32))  =
+                return x
+            | otherwise =
+                Left $ TextDecodingError "Word32 is out of bounds"
+
+instance ToText Word32 where
     toText = T.pack . show
 
 instance FromText Integer where

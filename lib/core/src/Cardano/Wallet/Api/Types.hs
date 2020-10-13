@@ -90,6 +90,7 @@ module Cardano.Wallet.Api.Types
     , ApiWalletMigrationPostData (..)
     , ApiWalletMigrationInfo (..)
     , ApiWithdrawal (..)
+    , ApiVerificationKeyHash (..)
 
     -- * API Types (Byron)
     , ApiByronWallet (..)
@@ -711,6 +712,10 @@ data ApiWalletMigrationInfo = ApiWalletMigrationInfo
 newtype ApiWithdrawRewards = ApiWithdrawRewards Bool
     deriving (Eq, Generic, Show)
 
+newtype ApiVerificationKeyHash = ApiVerificationKeyHash
+    { verificationKeyHash :: ApiT (Hash "ScriptKey")
+    } deriving (Eq, Generic, Show)
+
 -- | Error codes returned by the API, in the form of snake_cased strings
 data ApiErrorCode
     = NoSuchWallet
@@ -985,6 +990,17 @@ instance FromJSON (ApiT DerivationIndex) where
                          \suffix (e.g. \"1815H\" or \"44\""
                 Just s ->
                     pure s
+
+instance FromJSON (ApiT (Hash "ScriptKey")) where
+    parseJSON =
+        parseJSON >=> eitherToParser . bimap ShowFmt ApiT . fromText
+instance ToJSON (ApiT (Hash "ScriptKey")) where
+    toJSON = toJSON . toText . getApiT
+
+instance ToJSON ApiVerificationKeyHash where
+    toJSON = genericToJSON defaultRecordTypeOptions
+instance FromJSON ApiVerificationKeyHash where
+    parseJSON = genericParseJSON defaultRecordTypeOptions
 
 instance FromJSON ApiEpochInfo where
     parseJSON = genericParseJSON defaultRecordTypeOptions

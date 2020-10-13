@@ -1191,6 +1191,12 @@ newtype DerivationIndex
 
 instance NFData DerivationIndex
 
+instance FromText DerivationIndex where
+    fromText = fmap DerivationIndex . fromText
+
+instance ToText DerivationIndex where
+    toText (DerivationIndex index) = toText index
+
 {-------------------------------------------------------------------------------
                                      Coin
 -------------------------------------------------------------------------------}
@@ -1848,6 +1854,7 @@ instance FromText (Hash "Genesis")         where fromText = hashFromText 32
 instance FromText (Hash "Block")           where fromText = hashFromText 32
 instance FromText (Hash "BlockHeader")     where fromText = hashFromText 32
 instance FromText (Hash "ChimericAccount") where fromText = hashFromText 28
+instance FromText (Hash "ScriptKey")       where fromText = hashFromText 28
 
 hashFromText
     :: forall t. (KnownSymbol t)
